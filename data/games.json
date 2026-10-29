@@ -1,0 +1,32 @@
+{
+    "prisoners_dilemma": {
+        "name": "Prisoner's Dilemma",
+        "description": "You are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.",
+        "actions": ["COOPERATE", "DEFECT"],
+        "payoffs": {
+            "COOPERATE": {
+                "COOPERATE": [3, 3],
+                "DEFECT": [0, 5]
+            },
+            "DEFECT": {
+                "COOPERATE": [5, 0],
+                "DEFECT": [1, 1]
+            }
+        }
+    },
+    "stag_hunt": {
+        "name": "Stag Hunt",
+        "description": "You are hunting. You can choose to hunt a Stag or a Hare. Hunting a Stag requires cooperation and yields the highest reward (4) for both. Hunting a Hare can be done alone and guarantees a small reward (1), while the other player gets nothing (0) if they hunted the Stag.",
+        "actions": ["STAG", "HARE"],
+        "payoffs": {
+            "STAG": {
+                "STAG": [4, 4],
+                "HARE": [0, 1]
+            },
+            "HARE": {
+                "STAG": [1, 0],
+                "HARE": [1, 1]
+            }
+        }
+    }
+}
