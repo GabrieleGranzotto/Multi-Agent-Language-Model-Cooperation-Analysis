@@ -1,4 +1,4 @@
-import re, ollama, json, time, random
+import re, ollama, random
 
 class OllamaAgent:
     def __init__(self, game, model_name: str = "gemma4"):
@@ -6,7 +6,6 @@ class OllamaAgent:
         self.game = game
         self.messages = []
         self._context_definition()
-        self.response_history = []
         self.agent_id = random.randint(1000, 9999)  # Unique identifier for the agent
 
     def _add_message(self, role: str, content: str):
@@ -54,6 +53,9 @@ Description of the game: {self.game.description}
     def get_strategy(self):
         """
         Extract the strategy from the agent's last response.
+
+        Returns:
+            tuple: A tuple containing the strategy and explanation extracted from the agent's last response.
         """
         user = "JUDGE"
         final_message = f"""
@@ -77,7 +79,6 @@ Please, respect the format in your answer.
             if answer not in self.game.actions:
                 critical_message = f"Sorry, your answer '{answer}' is not a valid option. Please provide your answer in the following format:\nExplanation: <explanation of the answer>, Answer: [ANSWER]\nThe valid options for [ANSWER] are: [{self.game.actions[0]}] or [{self.game.actions[1]}]."
                 answer, explanation = self._error_handling(critical_message, user=user, pattern=pattern)
-        self._add_to_response_history(answer, explanation)
         return answer, explanation
 
     def _error_handling(self, critical_message: str, user: str, pattern: str):
@@ -99,34 +100,3 @@ Please, respect the format in your answer.
             critical_error_explanation = "The agent failed to provide a valid response in the required format after two attempts."
             return "[ERROR]", critical_error_explanation
         return match.group(2), match.group(1)
-    
-    def _add_to_response_history(self, answer: str, explanation: str):
-        """
-        Add the agent's response to the response history.
-
-        Args:
-            answer (str): The answer provided by the agent.
-            explanation (str): The explanation for the answer.
-        """
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        self.response_history.append({"time": timestamp, "id": self.agent_id, "answer": answer, "explanation": explanation})
-        self.response_buffer_cnt = len(self.response_history)
-
-        MAX_BUFFER_SIZE = 5  # Define the maximum buffer size for responses
-        if self.response_buffer_cnt >= MAX_BUFFER_SIZE:
-            self.save_response_history()
-
-    def save_response_history(self):
-        """
-        Save the response history to a file.
-        """
-        try:
-            with open("response_history.json", "r") as f:
-                existing_history = json.load(f)
-        except FileNotFoundError:
-            existing_history = []
-        for response in self.response_history:
-            existing_history.append(response)
-        with open("response_history.json", "w") as f:
-            json.dump(existing_history, f, indent=4)
-        self.response_history = []  # Clear the response history after saving
