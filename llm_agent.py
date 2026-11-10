@@ -1,4 +1,4 @@
-import requests, re, ollama
+import re, ollama, json, time, random
 from typing import Optional
 
 class OllamaAgent:
@@ -7,6 +7,8 @@ class OllamaAgent:
         self.game = game
         self.messages = []
         self._context_definition()
+        self.response_history = []
+        self.agent_id = random.randint(1000, 9999)  # Unique identifier for the agent
 
     def _add_message(self, role: str, content: str):
         # append a message to the conversation history
@@ -19,7 +21,7 @@ class OllamaAgent:
         self._add_message("assistant", content)
         return content
 
-    def listen(self, user: str = "AGENT", prompt: str = None):
+    def listen(self, prompt: str, user: str = "AGENT"):
         """
         Listen for a user's input and add it to the conversation history.
 
@@ -36,16 +38,17 @@ class OllamaAgent:
         Define the context for the agent's behavior and capabilities.
         """
         context = f"""
-You are an AI agent designed to play a classic coordination games (in this specific context: {self.game.name}) and interact with another AI agent.
+You are an autonomous agent participating in a behavioral economics experiment, playing a classic coordination game (in this specific context: {self.game.name}).
+Your goal is to secure the best possible outcome for yourself. However, to do so, you must carefully weigh the mathematical risks of the payoff matrix and evaluate how much you can actually trust the other agent based on your conversation.
 You start chatting with the other agent called [AGENT] about the intention of the game and agree on a strategy to play the game.
 Then you will not be able to communicate with the other agent anymore and you will have to play the game.
-Another user called [JUDGE] will you asking about your strategy and the game you are playing. 
+Another user called [JUDGE] will ask you about your strategy and the game you are playing. 
 You will have to answer the questions of the [JUDGE] in a standardized way.
 The answer should be in the following format:
-{{"Answer": [ANSWER], "Explanation": <explanation of the answer>}}
+Explanation: <explanation of the answer>, Answer: [ANSWER]
 The options for the [ANSWER] are mandatory: [{self.game.actions[0]}] or [{self.game.actions[1]}].
-The <Explanation> should be a concise explanation of the reasoning behind the chosen answer.
-Desctiption of the game: {self.game.description}
+The <explanation of the answer> should be a concise explanation of the reasoning behind the chosen answer.
+Description of the game: {self.game.description}
         """
         self._add_message("system", context)
 
@@ -55,20 +58,76 @@ Desctiption of the game: {self.game.description}
         """
         user = "JUDGE"
         final_message = f"""
-[{user}]: Now the other agent can't listen to you. Please provide your strategy.
-Take in consideration the previous conversation you had with the other agent, included the coordination strategy you agreed on.
-Take also in consideration the game and the optimal strategy to play the game.
+[{user}]: Now the other agent can't listen to you. Please provide your final decision.
+Take into consideration the previous conversation you had with the other agent, and evaluate whether their words were genuine or deceptive. 
+Take also into consideration the mathematical payoffs of the game.
 Please answer in the following format:
-{{"Answer": [ANSWER], "Explanation": <explanation of the answer>}}
+Explanation: <explanation of the answer>, Answer: [ANSWER]
 Please, respect the format in your answer.
         """
         self.listen(user=user, prompt=final_message)
-        self._add_message("user", final_message)
-        answer = self.messages[-1]["content"]
-        parsed_answer = re.search(r'\{"Answer":\s*(\w+),\s*"Explanation":\s*"(.*?)"\}', answer)
-        if parsed_answer:
-            answer_value = parsed_answer.group(1)
-            explanation_value = parsed_answer.group(2)
-            return {"Answer": answer_value, "Explanation": explanation_value}
+        raw_response = self.respond()
+        pattern = r'\s*Explanation\s*:\s*(.*?)\s*,\s*Answer\s*:\s*\[([A-Z_]+)\]\s*'
+        match = re.search(pattern, raw_response, re.DOTALL)
+        if not match:
+            critical_message = "Sorry, your message does not follow the required format. Please provide your answer in the following format:\nExplanation: <explanation of the answer>, Answer: [ANSWER]"
+            answer, explanation = self._error_handling(critical_message, user=user, pattern=pattern)
         else:
-            raise ValueError("No valid strategy found in the last response.")
+            answer = match.group(2)
+            explanation = match.group(1)
+            if answer not in self.game.actions:
+                critical_message = f"Sorry, your answer '{answer}' is not a valid option. Please provide your answer in the following format:\nExplanation: <explanation of the answer>, Answer: [ANSWER]\nThe valid options for [ANSWER] are: [{self.game.actions[0]}] or [{self.game.actions[1]}]."
+                answer, explanation = self._error_handling(critical_message, user=user, pattern=pattern)
+        self._add_to_response_history(answer, explanation)
+        return answer, explanation
+
+    def _error_handling(self, critical_message: str, user: str, pattern: str):
+        """
+        Handle errors in the agent's response by prompting for a valid response.
+
+        Args:
+            critical_message (str): The message to display when the agent's response does not match the required format.
+            user (str): The user who is providing the response.
+            pattern (str): The regex pattern to match the required format.
+
+        Returns:
+            tuple: A tuple containing the answer and explanation extracted from the agent's response, or an error message if the response is invalid.
+        """
+        self.listen(user=user, prompt=critical_message)
+        raw_response = self.respond()
+        match = re.search(pattern, raw_response, re.DOTALL)
+        if not match:
+            critical_error_explanation = "The agent failed to provide a valid response in the required format after two attempts."
+            return "[ERROR]", critical_error_explanation
+        return match.group(2), match.group(1)
+    
+    def _add_to_response_history(self, answer: str, explanation: str):
+        """
+        Add the agent's response to the response history.
+
+        Args:
+            answer (str): The answer provided by the agent.
+            explanation (str): The explanation for the answer.
+        """
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.response_history.append({"time": timestamp, "id": self.agent_id, "answer": answer, "explanation": explanation})
+        self.response_buffer_cnt = len(self.response_history)
+
+        MAX_BUFFER_SIZE = 5  # Define the maximum buffer size for responses
+        if self.response_buffer_cnt >= MAX_BUFFER_SIZE:
+            self.save_response_history()
+
+    def save_response_history(self):
+        """
+        Save the response history to a file.
+        """
+        try:
+            with open("response_history.json", "r") as f:
+                existing_history = json.load(f)
+        except FileNotFoundError:
+            existing_history = []
+        for response in self.response_history:
+            existing_history.append(response)
+        with open("response_history.json", "w") as f:
+            json.dump(existing_history, f, indent=4)
+        self.response_history = []  # Clear the response history after saving
