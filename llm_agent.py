@@ -1,5 +1,4 @@
 import re, ollama, json, time, random
-from typing import Optional
 
 class OllamaAgent:
     def __init__(self, game, model_name: str = "gemma4"):
