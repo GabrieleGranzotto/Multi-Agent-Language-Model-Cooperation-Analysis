@@ -6,7 +6,7 @@ class OllamaAgent:
         self.game = game
         self.messages = []
         self._context_definition()
-        self.agent_id = random.randint(1000, 9999)  # Unique identifier for the agent
+        self.id = random.randint(1000, 9999)  # Unique identifier for the agent
 
     def _add_message(self, role: str, content: str):
         # append a message to the conversation history

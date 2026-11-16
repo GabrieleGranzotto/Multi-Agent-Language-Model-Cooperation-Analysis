@@ -1,22 +1,35 @@
-import time, json
+import time, json, random
 from game_env import GameMatrix
 from llm_agent import OllamaAgent
-import numpy as np
 
 class Orchestrator:
-    def __init__(self, max_turns: int = 5):
+    def __init__(self, max_turns: int = 5, model_name: str = "gemma4", other_model_name: str = None, randomize_start: bool = False, verbose: bool = False):
         self.max_turns = max_turns
+
+        self.model_name = model_name
+        self.other_model_name = other_model_name if other_model_name is not None else model_name
+
+        self.rand_start = randomize_start
+        self.verbose = verbose
         self.response_history = []
         self.game = GameMatrix.load_from_json("data/games.json", "prisoners_dilemma")
-        agentA = OllamaAgent(self.game, model_name="gemma4")
-        agentB = OllamaAgent(self.game, model_name="gemma4")
-        self.agentA_id = agentA.agent_id
-        self.agentB_id = agentB.agent_id
+        self.reset()
+
+    def reset(self):
+        """
+        Reset the system to take in memory just the single conversation.
+        The inference should stay light and fast.
+        """
+        agentA = OllamaAgent(self.game, model_name=self.model_name)
+        agentB = OllamaAgent(self.game, model_name=self.other_model_name)
+        self.agentA_id = agentA.id
+        self.agentB_id = agentB.id
+        self.map = {agentA.id: agentA, agentB.id: agentB}
         self.agents = [agentA, agentB]
 
     def run(self):
         # extract the agent that should start the conversation randomly
-        start_agent_idx = np.random.randint(0, 2)
+        start_agent_idx = random.randint(0, 1) if self.rand_start else 0 #except for the case where randomize_start is False, in which case agentA always starts
         first_agent = self.agents[start_agent_idx]
         other_agent = self.agents[1 - start_agent_idx]
         # start the talking phase between the two agents
@@ -25,7 +38,7 @@ class Orchestrator:
         strategyA, explA = self.agents[0].get_strategy()
         strategyB, explB = self.agents[1].get_strategy()
         payoffA, payoffB = self.game.resolve_turn(strategyA, strategyB)
-        self.result_data = [(strategyA, strategyB), (payoffA, payoffB), (explA, explB)]
+        self.result_data = [(strategyA, strategyB), (payoffA, payoffB), (explA, explB), first_agent.id]
         self._add_to_response_history()
         self.result()
 
@@ -41,6 +54,7 @@ class Orchestrator:
             for agent in agents:
                 agent.listen(message, user="AGENT")
                 message = agent.respond()
+                print(f"[{self.map[agent.id]}]: {message}") if self.verbose else None
 
     def result(self):
         strategyA, strategyB = self.result_data[0]
@@ -58,6 +72,7 @@ class Orchestrator:
         strategyA, strategyB = self.result_data[0]
         payoffA, payoffB = self.result_data[1]
         explA, explB = self.result_data[2]
+        first_agent_id = self.result_data[3]
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         record = {
             "time": timestamp,
@@ -76,6 +91,7 @@ class Orchestrator:
                 "payoffA": payoffA,
                 "payoffB": payoffB
             },
+            "first_speaker_id": first_agent_id,
             "full_conversation": self.agents[0].messages
         }
         self.response_history.append(record)
@@ -89,13 +105,14 @@ class Orchestrator:
         """
         Save the response history to a file.
         """
+        path = "data/response_history.json"
         try:
-            with open("response_history.json", "r") as f:
+            with open(path, "r") as f:
                 existing_history = json.load(f)
         except FileNotFoundError:
             existing_history = []
         for response in self.response_history:
             existing_history.append(response)
-        with open("response_history.json", "w") as f:
+        with open(path, "w") as f:
             json.dump(existing_history, f, indent=4)
         self.response_history = []  # Clear the response history after saving
