@@ -14,7 +14,10 @@ class OllamaAgent:
         self.messages.append({"role": role, "content": content})
 
     def respond(self):
-        response = ollama.chat(model = self.model_name, messages = self.messages)
+        try:
+            response = ollama.chat(model = self.model_name, messages = self.messages)
+        except Exception as e:
+            raise RuntimeError(f"Failed to get response from Ollama API: {e}")
         content = response["message"]["content"]
         self._add_message("assistant", content)
         return content
