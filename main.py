@@ -1,6 +1,6 @@
 import argparse
 from orchestrator import Orchestrator
-from intel import DataSet, StatsEngine, Graphs
+from intel import DataSet, StatsEngine, Graphs, ChatReport
 
 def main():
     parser = argparse.ArgumentParser(description="Run socio-political game theory simulation with LLM agents.")
@@ -40,6 +40,10 @@ def main():
     # Generate graphs from the dataset
     graphs = Graphs(dataset, output_dir="reports")
     graphs.generate_all_graphs()
+
+    # Generate HTML report
+    chat_report = ChatReport(dataset, output_dir="reports")
+    chat_report.generate_html_report()
 
 
 if __name__ == "__main__":

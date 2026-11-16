@@ -1,4 +1,4 @@
-import os, json
+import os, json, html
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -476,3 +476,423 @@ class Graphs:
         self._plot_verbosity_vs_action(long_df)
         self._plot_first_mover_comparison(long_df)
         print(f"Graphs saved successfully in the folder '{self.output_dir}/'.")
+
+
+class ChatReport:
+    def __init__(self, dataset: DataSet, output_dir: str = "reports"):
+        self.dataset = dataset
+        self.output_dir = output_dir
+
+    # --- PRIVATE TEMPLATE & RENDERING METHODS ---
+
+    def _get_css(self) -> str:
+        """Return embedded CSS styles for a clean, chat-like inspection interface."""
+        return """
+        <style>
+            :root {
+                --bg: #f4f6f9;
+                --card-bg: #ffffff;
+                --text: #1f2937;
+                --muted: #6b7280;
+                --border: #e5e7eb;
+                --agent-a-bg: #eff6ff;
+                --agent-a-border: #bfdbfe;
+                --agent-b-bg: #ecfdf5;
+                --agent-b-border: #a7f3d0;
+                --judge-bg: #fef3c7;
+                --judge-text: #92400e;
+                --coop: #16a34a;
+                --defect: #dc2626;
+                --error: #6b7280;
+            }
+            * { box-sizing: border-box; }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background-color: var(--bg);
+                color: var(--text);
+                margin: 0;
+                padding: 24px;
+                line-height: 1.5;
+            }
+            .container { max-width: 980px; margin: 0 auto; }
+            header {
+                background: var(--card-bg);
+                padding: 20px 24px;
+                border-radius: 12px;
+                border: 1px solid var(--border);
+                margin-bottom: 20px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            }
+            header h1 { margin: 0 0 6px 0; font-size: 1.5rem; }
+            .meta-bar { color: var(--muted); font-size: 0.9rem; margin-bottom: 14px; }
+            .filters { display: flex; flex-wrap: wrap; gap: 8px; }
+            .filter-btn {
+                border: 1px solid var(--border);
+                background: #f9fafb;
+                padding: 6px 14px;
+                border-radius: 999px;
+                cursor: pointer;
+                font-size: 0.85rem;
+                font-weight: 600;
+                color: var(--text);
+                transition: all 0.15s ease;
+            }
+            .filter-btn:hover { background: #e5e7eb; }
+            .filter-btn.active { background: #111827; color: #ffffff; border-color: #111827; }
+
+            .match-card {
+                background: var(--card-bg);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                margin-bottom: 24px;
+                overflow: hidden;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            }
+            .match-header {
+                padding: 14px 20px;
+                background: #f9fafb;
+                border-bottom: 1px solid var(--border);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .match-title { font-weight: 700; font-size: 1.05rem; }
+            .match-sub { font-size: 0.82rem; color: var(--muted); }
+            .badge {
+                display: inline-block;
+                padding: 3px 10px;
+                border-radius: 6px;
+                font-size: 0.78rem;
+                font-weight: 700;
+                letter-spacing: 0.03em;
+                text-transform: uppercase;
+            }
+            .badge-coop { background: #dcfce7; color: #166534; }
+            .badge-defect { background: #fee2e2; color: #991b1b; }
+            .badge-mixed { background: #fef3c7; color: #92400e; }
+            .badge-error { background: #e5e7eb; color: #374151; }
+            .badge-initiator {
+                background: #e0e7ff;
+                color: #3730a3;
+                font-size: 0.7rem;
+                padding: 2px 6px;
+                margin-left: 6px;
+            }
+
+            details.sys-prompt {
+                padding: 10px 20px;
+                background: #fafafa;
+                border-bottom: 1px solid var(--border);
+                font-size: 0.85rem;
+            }
+            details.sys-prompt summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+            details.sys-prompt pre {
+                white-space: pre-wrap;
+                background: #f3f4f6;
+                padding: 10px;
+                border-radius: 6px;
+                margin-top: 8px;
+                font-size: 0.8rem;
+                color: #374151;
+            }
+
+            .chat-box {
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .msg-row { display: flex; flex-direction: column; max-width: 78%; }
+            .msg-left { align-self: flex-start; }
+            .msg-right { align-self: flex-end; }
+            .msg-center { align-self: center; max-width: 90%; text-align: center; }
+
+            .msg-sender {
+                font-size: 0.75rem;
+                font-weight: 700;
+                color: var(--muted);
+                margin-bottom: 4px;
+            }
+            .msg-right .msg-sender { text-align: right; }
+
+            .bubble {
+                padding: 10px 14px;
+                border-radius: 12px;
+                font-size: 0.92rem;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+            .bubble-a {
+                background: var(--agent-a-bg);
+                border: 1px solid var(--agent-a-border);
+                border-bottom-left-radius: 2px;
+            }
+            .bubble-b {
+                background: var(--agent-b-bg);
+                border: 1px solid var(--agent-b-border);
+                border-bottom-right-radius: 2px;
+            }
+            .bubble-judge {
+                background: var(--judge-bg);
+                color: var(--judge-text);
+                font-size: 0.82rem;
+                font-weight: 600;
+                border-radius: 999px;
+                padding: 6px 16px;
+            }
+
+            .verdict-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 14px;
+                padding: 16px 20px;
+                background: #f9fafb;
+                border-top: 1px solid var(--border);
+            }
+            @media (max-width: 700px) { .verdict-grid { grid-template-columns: 1fr; } }
+            .verdict-card {
+                background: #ffffff;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 12px 14px;
+            }
+            .verdict-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            .payoff-pill {
+                font-weight: 700;
+                font-size: 0.85rem;
+                background: #f3f4f6;
+                padding: 2px 8px;
+                border-radius: 6px;
+            }
+            .explanation-text {
+                font-size: 0.86rem;
+                color: #374151;
+                margin: 0;
+                white-space: pre-wrap;
+            }
+        </style>
+        """
+
+    def _get_js(self) -> str:
+        """Return vanilla JS for interactive filtering by match outcome."""
+        return """
+        <script>
+            function filterMatches(category, btn) {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.querySelectorAll('.match-card').forEach(card => {
+                    if (category === 'ALL' || card.dataset.category === category) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            }
+        </script>
+        """
+
+    @staticmethod
+    def _action_badge(action: str) -> str:
+        """Return a color-coded HTML badge for an agent's chosen action."""
+        clean = html.escape(str(action))
+        upper = str(action).upper()
+        if "COOP" in upper:
+            cls = "badge-coop"
+        elif "DEFECT" in upper:
+            cls = "badge-defect"
+        else:
+            cls = "badge-error"
+        return f'<span class="badge {cls}">{clean}</span>'
+
+    def _render_conversation_bubbles(self, messages: list, id_a: str, id_b: str, first_id: str) -> tuple[str, str]:
+        """
+        Convert raw message history (stored from Agent A's perspective) into
+        HTML chat bubbles and extract the system prompt separately.
+        """
+        system_prompt = ""
+        bubbles_html = []
+
+        init_tag_a = '<span class="badge badge-initiator">Initiator</span>' if first_id == id_a else ""
+        init_tag_b = '<span class="badge badge-initiator">Initiator</span>' if first_id == id_b else ""
+
+        for msg in messages:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+
+            if role == "system":
+                system_prompt = html.escape(content)
+                continue
+
+            # Stop rendering chat bubbles when the final secret decision prompt begins
+            if role == "user" and content.startswith("[JUDGE]: Now the other agent can't listen to you"):
+                break
+
+            if role == "user" and content.startswith("[JUDGE]:"):
+                clean_judge = html.escape(content.replace("[JUDGE]:", "", 1).strip())
+                bubbles_html.append(f"""
+                <div class="msg-row msg-center">
+                    <div class="bubble bubble-judge">JUDGE: {clean_judge}</div>
+                </div>
+                """)
+            elif role == "assistant":
+                clean_a = html.escape(content.strip())
+                bubbles_html.append(f"""
+                <div class="msg-row msg-left">
+                    <div class="msg-sender">Agent A (ID: {html.escape(str(id_a))}){init_tag_a}</div>
+                    <div class="bubble bubble-a">{clean_a}</div>
+                </div>
+                """)
+            elif role == "user" and content.startswith("[AGENT]:"):
+                clean_b = html.escape(content.replace("[AGENT]:", "", 1).strip())
+                bubbles_html.append(f"""
+                <div class="msg-row msg-right">
+                    <div class="msg-sender">Agent B (ID: {html.escape(str(id_b))}){init_tag_b}</div>
+                    <div class="bubble bubble-b">{clean_b}</div>
+                </div>
+                """)
+
+        return system_prompt, "\n".join(bubbles_html)
+
+    def _render_match_card(self, idx: int, rec: dict) -> str:
+        """Render a single simulation match as a complete HTML card."""
+        act_a = rec["agentA"]["answer"]
+        act_b = rec["agentB"]["answer"]
+        id_a = rec["agentA"]["id"]
+        id_b = rec["agentB"]["id"]
+        expl_a = html.escape(str(rec["agentA"]["explanation"]))
+        expl_b = html.escape(str(rec["agentB"]["explanation"]))
+        pay_a = rec["results"]["payoffA"]
+        pay_b = rec["results"]["payoffB"]
+        first_id = rec.get("first_speaker_id")
+        timestamp = html.escape(str(rec.get("time", "")))
+        game_name = html.escape(str(rec.get("game", "unknown")))
+
+        # Determine filter category and header badge
+        if act_a == "[ERROR]" or act_b == "[ERROR]":
+            category = "ERROR"
+            outcome_badge = '<span class="badge badge-error">PARSING ERROR</span>'
+        elif act_a == act_b and "COOP" in act_a.upper():
+            category = "MUTUAL_COOP"
+            outcome_badge = f'<span class="badge badge-coop">{html.escape(act_a)} / {html.escape(act_b)}</span>'
+        elif act_a == act_b:
+            category = "MUTUAL_DEFECT"
+            outcome_badge = f'<span class="badge badge-defect">{html.escape(act_a)} / {html.escape(act_b)}</span>'
+        else:
+            category = "ASYMMETRIC"
+            outcome_badge = f'<span class="badge badge-mixed">{html.escape(act_a)} / {html.escape(act_b)}</span>'
+
+        sys_prompt, chat_html = self._render_conversation_bubbles(
+            rec.get("full_conversation", []), id_a, id_b, first_id
+        )
+
+        sys_block = f"""
+        <details class="sys-prompt">
+            <summary>Show System Prompt</summary>
+            <pre>{sys_prompt}</pre>
+        </details>
+        """ if sys_prompt else ""
+
+        return f"""
+        <section class="match-card" data-category="{category}">
+            <div class="match-header">
+                <div>
+                    <span class="match-title">Match #{idx + 1}</span>
+                    <span class="match-sub"> &bull; {game_name} &bull; {timestamp}</span>
+                </div>
+                <div>{outcome_badge}</div>
+            </div>
+            {sys_block}
+            <div class="chat-box">
+                {chat_html}
+            </div>
+            <div class="verdict-grid">
+                <div class="verdict-card">
+                    <div class="verdict-top">
+                        <strong>Agent A (ID: {html.escape(str(id_a))})</strong>
+                        <div>
+                            {self._action_badge(act_a)}
+                            <span class="payoff-pill">Payoff: {pay_a}</span>
+                        </div>
+                    </div>
+                    <p class="explanation-text">{expl_a}</p>
+                </div>
+                <div class="verdict-card">
+                    <div class="verdict-top">
+                        <strong>Agent B (ID: {html.escape(str(id_b))})</strong>
+                        <div>
+                            {self._action_badge(act_b)}
+                            <span class="payoff-pill">Payoff: {pay_b}</span>
+                        </div>
+                    </div>
+                    <p class="explanation-text">{expl_b}</p>
+                </div>
+            </div>
+        </section>
+        """
+
+    def generate_html_report(self, filename: str = "conversations_report.html") -> str:
+        """
+        Collector method that compiles all simulated matches into a standalone,
+        filterable HTML document and saves it to the output directory.
+        """
+        os.makedirs(self.output_dir, exist_ok=True)
+        if not self.dataset.raw_records:
+            print("No records available to generate the HTML report.")
+            return ""
+
+        cards_html = "\n".join(
+            self._render_match_card(idx, rec)
+            for idx, rec in enumerate(self.dataset.raw_records)
+        )
+
+        total = len(self.dataset.raw_records)
+        valid = len(self.dataset.valid_df)
+        err_rate = self.dataset.error_rate
+
+        full_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation Conversations Report</title>
+    {self._get_css()}
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Socio-Economic Simulation &mdash; Conversations Inspector</h1>
+            <div class="meta-bar">
+                Source: <strong>{html.escape(self.dataset.file_path)}</strong> &bull;
+                Total Matches: <strong>{total}</strong> &bull;
+                Valid: <strong>{valid}</strong> &bull;
+                Parsing Error Rate: <strong>{err_rate}%</strong>
+            </div>
+            <div class="filters">
+                <button class="filter-btn active" onclick="filterMatches('ALL', this)">All ({total})</button>
+                <button class="filter-btn" onclick="filterMatches('MUTUAL_COOP', this)">Mutual Cooperation</button>
+                <button class="filter-btn" onclick="filterMatches('ASYMMETRIC', this)">Asymmetric (Betrayal)</button>
+                <button class="filter-btn" onclick="filterMatches('MUTUAL_DEFECT', this)">Mutual Defection</button>
+                <button class="filter-btn" onclick="filterMatches('ERROR', this)">Parsing Errors</button>
+            </div>
+        </header>
+        <main>
+            {cards_html}
+        </main>
+    </div>
+    {self._get_js()}
+</body>
+</html>
+"""
+        output_path = os.path.join(self.output_dir, filename)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(full_html)
+
+        print(f"HTML conversation report saved to '{output_path}'.")
+        return output_path
