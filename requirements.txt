@@ -1,0 +1,14 @@
+# LLM Inference Client
+ollama>=0.4.0
+
+# Data Manipulation & Numerical Computing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Statistical Testing & Logistic Regression
+scipy>=1.11.0
+statsmodels>=0.14.0
+
+# Data Visualization
+matplotlib>=3.7.0
+seaborn>=0.13.0
