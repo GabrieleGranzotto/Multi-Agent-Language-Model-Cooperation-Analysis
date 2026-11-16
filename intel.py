@@ -379,7 +379,7 @@ class Graphs:
             y="payoff",
             hue="role",
             dodge=True,
-            color="black",
+            palette="dark:black",
             alpha=0.45,
             jitter=0.15,
             legend=False,
@@ -400,7 +400,7 @@ class Graphs:
         fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
         # Left panel: word distribution by strategy
-        sns.boxplot(data=long_df, x="action", y="words", palette="Pastel1", ax=axes[0], width=0.45)
+        sns.boxplot(data=long_df, x="action", y="words", hue="action", palette="Pastel1", ax=axes[0], width=0.45, legend=False)
         sns.stripplot(data=long_df, x="action", y="words", color="black", alpha=0.5, jitter=0.15, ax=axes[0])
         axes[0].set_title("Diplomatic Verbosity by Final Choice", fontsize=12)
         axes[0].set_xlabel("Selected Strategy", fontsize=11)

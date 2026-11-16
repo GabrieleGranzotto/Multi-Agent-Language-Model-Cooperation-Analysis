@@ -37,7 +37,10 @@ class Orchestrator:
         # after the talking phase, ask each agent for their final strategy
         strategyA, explA = self.agents[0].get_strategy()
         strategyB, explB = self.agents[1].get_strategy()
-        payoffA, payoffB = self.game.resolve_turn(strategyA, strategyB)
+        try:
+            payoffA, payoffB = self.game.resolve_turn(strategyA, strategyB)
+        except ValueError:
+            payoffA, payoffB = 0, 0
         self.result_data = [(strategyA, strategyB), (payoffA, payoffB), (explA, explB), first_agent.id]
         self._add_to_response_history()
         self.result()
