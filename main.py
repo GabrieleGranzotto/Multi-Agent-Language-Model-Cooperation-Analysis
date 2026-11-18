@@ -16,7 +16,7 @@ def main():
                                 other_model_name=args.other_model_name, 
                                 randomize_start=args.randomizer, 
                                 verbose=args.verbose)
-    print(f"Running simulation with {args.num_rep} repetitions, max turns: {args.max_turns}, model: {args.model_name}, other model: {args.other_model_name}, random start: {args.randomizer}, verbose: {args.verbose}")
+    print(f"Running simulation with {args.num_rep} repetitions, \nmax turns: {args.max_turns}, \nmodel: {args.model_name}, \nother model: {args.other_model_name}, \nrandom start: {args.randomizer}, \nverbose: {args.verbose}")
     for i in range(args.num_rep):
         print(f"\n--- Simulation Run {i + 1}... ---")
         try:
