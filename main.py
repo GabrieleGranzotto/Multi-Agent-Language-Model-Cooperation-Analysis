@@ -31,7 +31,7 @@ def main():
     orchestrator.save_response_history()  # Save the response history to a JSON file
     
     # Create a new dataset from the response history
-    dataset = DataSet("response_history.json")
+    dataset = DataSet("data/response_history.json")
 
     # Run all analyses on the dataset and export results to the "reports" directory
     stats_engine = StatsEngine(dataset)
