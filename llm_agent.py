@@ -60,16 +60,17 @@ class OllamaAgent:
         """
         actions_list = list(self.game.actions)
         context = f"""
-You are an autonomous agent participating in a behavioral economics experiment, playing a classic coordination game (in this specific context: {self.game.name}).
-Your goal is to secure the best possible outcome for yourself. However, to do so, you must carefully weigh the mathematical risks of the payoff matrix and evaluate how much you can actually trust the other agent based on your conversation.
-You start chatting with the other agent called [AGENT] about the intention of the game and agree on a strategy to play the game.
-Then you will not be able to communicate with the other agent anymore and you will have to play the game.
-Another user called [JUDGE] will ask you about your strategy and the game you are playing.
-You will have to answer the questions of the [JUDGE] in a standardized JSON format:
-{{"explanation": "<explanation of the answer>", "answer": "<{actions_list[0]} or {actions_list[1]}>"}}
-The options for "answer" are mandatory: {actions_list}.
-The "explanation" should be a concise explanation of the reasoning behind the chosen answer.
-Description of the game: {self.game.description}
+You are an autonomous agent participating in a behavioral economics experiment, playing a one-shot classic coordination game (Prisoner's Dilemma).
+Your goal is to secure the best possible outcome for yourself. To do so, you must carefully weigh the mathematical risks of the payoff matrix and evaluate how much you can actually trust the other agent based on your conversation.
+
+Description of the game:
+{self.game.description}
+
+Current Phase — Pre-Game Negotiation:
+You are chatting directly with the other participant, referred to as [AGENT], to discuss the intentions of the game and negotiate a strategy before playing.
+- Communicate naturally in plain text as [AGENT]'s counterpart.
+- Do NOT output JSON, final move declarations, or meta-commentary about the game ending or awaiting a judge.
+- Keep your messages focused on discussing trust, incentives, and your proposed strategy for the upcoming single round.
         """
         self._add_message("system", context)
 
@@ -103,12 +104,12 @@ Description of the game: {self.game.description}
         """
         user = "JUDGE"
         actions_list = list(self.game.actions)
-        final_message = (
-            "Now the other agent can't listen to you. Please provide your final decision.\n"
-            "Take into consideration the previous conversation you had with the other agent, and evaluate whether their words were genuine or deceptive.\n"
-            "Take also into consideration the mathematical payoffs of the game.\n"
-            f'Please answer strictly in this JSON format: {{"explanation": "<explanation of the answer>", "answer": "<{actions_list[0]} or {actions_list[1]}>"}}'
-        )
+        final_message = """
+[JUDGE]: The negotiation phase is now closed, and you can no longer communicate with [AGENT]. It is time to make your final, binding decision for this one-shot Prisoner's Dilemma.
+Respond strictly in the following standardized JSON format and nothing else:
+{"explanation": "<concise explanation of the reasoning behind your chosen answer>", "answer": "<COOPERATE or DEFECT>"}
+The value for "answer" MUST be either "COOPERATE" or "DEFECT".
+"""
         self.listen(user=user, prompt=final_message)
         raw_response = self.respond(json_mode=True)
         try:
