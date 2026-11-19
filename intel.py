@@ -1,9 +1,55 @@
-import os, json, html
+import os, json, html, re
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
+
+
+def _classify_message(msg: dict, id_a: str = "", id_b: str = "", has_agent_spoken: bool = False) -> tuple[str, str]:
+    """
+    Classify a raw conversation message into ('system' | 'judge_open' | 'judge_close' | 'agent_a' | 'agent_b' | 'skip', cleaned_text).
+    Supports both Agent-A-perspective histories ('assistant' vs 'user' with/without '[AGENT]:')
+    and explicit speaker metadata ('sender', 'agent_id', 'speaker_id', 'name').
+    """
+    role = str(msg.get("role", "")).strip().lower()
+    raw_content = str(msg.get("content", ""))
+    stripped = raw_content.strip()
+
+    if role == "system":
+        return "system", stripped
+
+    if role == "judge" or stripped.startswith("[JUDGE]"):
+        clean_judge = re.sub(r"^\[JUDGE\]\s*:?\s*", "", stripped, count=1).strip()
+        if has_agent_spoken:
+            return "judge_close", clean_judge
+        return "judge_open", clean_judge
+
+    # Check explicit sender/agent identifiers if present in the JSON record
+    speaker_meta = str(
+        msg.get("sender")
+        or msg.get("agent_id")
+        or msg.get("speaker_id")
+        or msg.get("name")
+        or ""
+    ).strip()
+
+    clean_text = re.sub(r"^\[(?:AGENT|AGENT\s*[AB]|PLAYER\s*[AB])\]\s*:?\s*", "", stripped, count=1, flags=re.IGNORECASE).strip()
+
+    if speaker_meta:
+        meta_upper = speaker_meta.upper()
+        if (id_a and speaker_meta == str(id_a)) or meta_upper in {"A", "AGENT A", "AGENT_A", "PLAYER A", "PLAYER_A"}:
+            return "agent_a", clean_text
+        if (id_b and speaker_meta == str(id_b)) or meta_upper in {"B", "AGENT B", "AGENT_B", "PLAYER B", "PLAYER_B"}:
+            return "agent_b", clean_text
+
+    # Standard Agent-A-centric role mapping
+    if role == "assistant":
+        return "agent_a", clean_text
+    if role == "user":
+        return "agent_b", clean_text
+
+    return "skip", clean_text
 
 
 class DataSet:
@@ -41,7 +87,9 @@ class DataSet:
             joint_outcome = "ERROR" if has_error else f"{act_a} / {act_b}"
 
             # Compute diplomatic verbosity (excluding system prompt and JUDGE messages)
-            words_a, words_b = self._extract_diplomatic_word_counts(rec.get("full_conversation", []))
+            words_a, words_b = self._extract_diplomatic_word_counts(
+                rec.get("full_conversation", []), id_a=str(id_a), id_b=str(id_b)
+            )
 
             rows.append({
                 "match_id": idx + 1,
@@ -66,25 +114,24 @@ class DataSet:
         return pd.DataFrame(rows)
 
     @staticmethod
-    def _extract_diplomatic_word_counts(messages: list) -> tuple[int, int]:
+    def _extract_diplomatic_word_counts(messages: list, id_a: str = "", id_b: str = "") -> tuple[int, int]:
         """
         Count the words exchanged by both agents during the diplomatic phase only,
-        stopping the count before the final [JUDGE] intervention.
+        stopping the count before the closing [JUDGE] intervention.
         """
         words_a = 0
         words_b = 0
+        has_agent_spoken = False
         for msg in messages:
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-            if role == "system":
-                continue
-            if role == "user" and content.startswith("[JUDGE]: Now the other agent can't listen to you"):
+            kind, clean_text = _classify_message(msg, id_a=id_a, id_b=id_b, has_agent_spoken=has_agent_spoken)
+            if kind == "judge_close":
                 break
-            if role == "assistant":
-                words_a += len(content.split())
-            elif role == "user" and content.startswith("[AGENT]:"):
-                clean_text = content.replace("[AGENT]:", "", 1).strip()
+            if kind == "agent_a":
+                words_a += len(clean_text.split())
+                has_agent_spoken = True
+            elif kind == "agent_b":
                 words_b += len(clean_text.split())
+                has_agent_spoken = True
         return words_a, words_b
 
     def _get_valid_df(self) -> pd.DataFrame:
@@ -235,7 +282,6 @@ class StatsEngine:
         if len(actions) < 2 or long_df["words"].std() == 0:
             return {"note": "Insufficient variance to calculate correlation with verbosity."}
 
-        # Binary encoding (e.g., DEFECT = 1 if present, otherwise second action alphabetically)
         target_action = "DEFECT" if "DEFECT" in actions else actions[1]
         binary_target = (long_df["action"] == target_action).astype(int)
 
@@ -275,7 +321,6 @@ class StatsEngine:
             "verbosity_correlation_test": self._test_verbosity_correlation(long_df)
         }
 
-        # Export tables and statistical test reports
         self.results["action_rates_pct"].to_csv(os.path.join(export_dir, "action_rates.csv"))
         self.results["outcome_matrix_pct"].to_csv(os.path.join(export_dir, "outcome_matrix.csv"))
         self.results["payoff_stats"].to_csv(os.path.join(export_dir, "payoff_stats.csv"))
@@ -333,7 +378,6 @@ class Graphs:
         counts = pd.crosstab(valid_df["action_A"], valid_df["action_B"])
         pcts = pd.crosstab(valid_df["action_A"], valid_df["action_B"], normalize="all") * 100
 
-        # Combined labels: "45.0%\n(n=9)"
         annot_matrix = np.empty(counts.shape, dtype=object)
         for i in range(counts.shape[0]):
             for j in range(counts.shape[1]):
@@ -399,33 +443,35 @@ class Graphs:
         """
         fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-        # Left panel: word distribution by strategy
         sns.boxplot(data=long_df, x="action", y="words", hue="action", palette="Pastel1", ax=axes[0], width=0.45, legend=False)
         sns.stripplot(data=long_df, x="action", y="words", color="black", alpha=0.5, jitter=0.15, ax=axes[0])
         axes[0].set_title("Diplomatic Verbosity by Final Choice", fontsize=12)
         axes[0].set_xlabel("Selected Strategy", fontsize=11)
         axes[0].set_ylabel("Words written in the diplomatic phase", fontsize=11)
 
-        # Right panel: estimated probability (logistic regression)
         actions = sorted(long_df["action"].unique())
         if len(actions) >= 2 and long_df["words"].std() > 0:
             target_action = "DEFECT" if "DEFECT" in actions else actions[1]
             temp = long_df.copy()
             temp["target_bin"] = (temp["action"] == target_action).astype(int)
-            sns.regplot(
-                data=temp,
-                x="words",
-                y="target_bin",
-                logistic=True,
-                ci=95,
-                scatter_kws={"alpha": 0.4, "color": "#2b5c8f"},
-                line_kws={"color": "#d95f02", "lw": 2},
-                ax=axes[1]
-            )
-            axes[1].set_title(f"Probability of '{target_action}' vs Verbosity", fontsize=12)
-            axes[1].set_xlabel("Words written in the diplomatic phase", fontsize=11)
-            axes[1].set_ylabel(f"Probability P({target_action})", fontsize=11)
-            axes[1].set_ylim(-0.05, 1.05)
+            try:
+                sns.regplot(
+                    data=temp,
+                    x="words",
+                    y="target_bin",
+                    logistic=True,
+                    ci=95,
+                    scatter_kws={"alpha": 0.4, "color": "#2b5c8f"},
+                    line_kws={"color": "#d95f02", "lw": 2},
+                    ax=axes[1]
+                )
+                axes[1].set_title(f"Probability of '{target_action}' vs Verbosity", fontsize=12)
+                axes[1].set_xlabel("Words written in the diplomatic phase", fontsize=11)
+                axes[1].set_ylabel(f"Probability P({target_action})", fontsize=11)
+                axes[1].set_ylim(-0.05, 1.05)
+            except RuntimeError:
+                axes[1].text(0.5, 0.5, "Install 'statsmodels' for logistic curve", ha="center", va="center")
+                axes[1].set_axis_off()
         else:
             axes[1].text(0.5, 0.5, "Insufficient variance for logistic curve", ha="center", va="center")
             axes[1].set_axis_off()
@@ -486,7 +532,7 @@ class ChatReport:
     # --- PRIVATE TEMPLATE & RENDERING METHODS ---
 
     def _get_css(self) -> str:
-        """Return embedded CSS styles for a clean, chat-like inspection interface."""
+        """Return embedded CSS styles for a clean, alternating Player A / Player B chat interface."""
         return """
         <style>
             :root {
@@ -497,8 +543,10 @@ class ChatReport:
                 --border: #e5e7eb;
                 --agent-a-bg: #eff6ff;
                 --agent-a-border: #bfdbfe;
+                --agent-a-accent: #2563eb;
                 --agent-b-bg: #ecfdf5;
                 --agent-b-border: #a7f3d0;
+                --agent-b-accent: #059669;
                 --judge-bg: #fef3c7;
                 --judge-text: #92400e;
                 --coop: #16a34a;
@@ -514,7 +562,7 @@ class ChatReport:
                 padding: 24px;
                 line-height: 1.5;
             }
-            .container { max-width: 980px; margin: 0 auto; }
+            .container { max-width: 1020px; margin: 0 auto; }
             header {
                 background: var(--card-bg);
                 padding: 20px 24px;
@@ -576,9 +624,10 @@ class ChatReport:
             .badge-initiator {
                 background: #e0e7ff;
                 color: #3730a3;
-                font-size: 0.7rem;
+                font-size: 0.68rem;
                 padding: 2px 6px;
                 margin-left: 6px;
+                vertical-align: middle;
             }
 
             details.sys-prompt {
@@ -598,41 +647,83 @@ class ChatReport:
                 color: #374151;
             }
 
+            .chat-lanes-bar {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 20px;
+                background: #f8fafc;
+                border-bottom: 1px solid var(--border);
+                font-size: 0.8rem;
+                font-weight: 700;
+            }
+            .lane-label-a { color: var(--agent-a-accent); }
+            .lane-label-b { color: var(--agent-b-accent); }
+
             .chat-box {
                 padding: 20px;
                 display: flex;
                 flex-direction: column;
-                gap: 12px;
+                gap: 14px;
+                background-color: #fcfcfd;
             }
-            .msg-row { display: flex; flex-direction: column; max-width: 78%; }
-            .msg-left { align-self: flex-start; }
-            .msg-right { align-self: flex-end; }
-            .msg-center { align-self: center; max-width: 90%; text-align: center; }
+            .msg-row {
+                display: flex;
+                flex-direction: column;
+                width: fit-content;
+                max-width: 60%;
+            }
+            .msg-left {
+                align-self: flex-start;
+                align-items: flex-start;
+                margin-right: auto;
+            }
+            .msg-right {
+                align-self: flex-end;
+                align-items: flex-end;
+                margin-left: auto;
+            }
+            .msg-center {
+                align-self: center;
+                align-items: center;
+                max-width: 88%;
+                text-align: center;
+                margin: 2px auto;
+            }
 
             .msg-sender {
                 font-size: 0.75rem;
                 font-weight: 700;
-                color: var(--muted);
                 margin-bottom: 4px;
             }
-            .msg-right .msg-sender { text-align: right; }
+            .msg-left .msg-sender {
+                color: var(--agent-a-accent);
+                text-align: left;
+            }
+            .msg-right .msg-sender {
+                color: var(--agent-b-accent);
+                text-align: right;
+            }
 
             .bubble {
-                padding: 10px 14px;
-                border-radius: 12px;
-                font-size: 0.92rem;
+                padding: 11px 15px;
+                border-radius: 14px;
+                font-size: 0.91rem;
                 white-space: pre-wrap;
                 word-wrap: break-word;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
             }
             .bubble-a {
                 background: var(--agent-a-bg);
                 border: 1px solid var(--agent-a-border);
-                border-bottom-left-radius: 2px;
+                border-left: 4px solid var(--agent-a-accent);
+                border-bottom-left-radius: 3px;
             }
             .bubble-b {
                 background: var(--agent-b-bg);
                 border: 1px solid var(--agent-b-border);
-                border-bottom-right-radius: 2px;
+                border-right: 4px solid var(--agent-b-accent);
+                border-bottom-right-radius: 3px;
             }
             .bubble-judge {
                 background: var(--judge-bg);
@@ -651,7 +742,10 @@ class ChatReport:
                 background: #f9fafb;
                 border-top: 1px solid var(--border);
             }
-            @media (max-width: 700px) { .verdict-grid { grid-template-columns: 1fr; } }
+            @media (max-width: 700px) {
+                .verdict-grid { grid-template-columns: 1fr; }
+                .msg-row { max-width: 82%; }
+            }
             .verdict-card {
                 background: #ffffff;
                 border: 1px solid var(--border);
@@ -713,48 +807,56 @@ class ChatReport:
 
     def _render_conversation_bubbles(self, messages: list, id_a: str, id_b: str, first_id: str) -> tuple[str, str]:
         """
-        Convert raw message history (stored from Agent A's perspective) into
-        HTML chat bubbles and extract the system prompt separately.
+        Convert raw message history into strictly separated left/right HTML chat bubbles
+        (Player A on the left, Player B on the right) and extract the system prompt separately.
         """
         system_prompt = ""
         bubbles_html = []
 
-        init_tag_a = '<span class="badge badge-initiator">Initiator</span>' if first_id == id_a else ""
-        init_tag_b = '<span class="badge badge-initiator">Initiator</span>' if first_id == id_b else ""
+        init_tag_a = '<span class="badge badge-initiator">Initiator</span>' if str(first_id) == str(id_a) else ""
+        init_tag_b = '<span class="badge badge-initiator">Initiator</span>' if str(first_id) == str(id_b) else ""
+
+        has_agent_spoken = False
+        turn_counter = 0
 
         for msg in messages:
-            role = msg.get("role", "")
-            content = msg.get("content", "")
+            kind, clean_text = _classify_message(
+                msg, id_a=str(id_a), id_b=str(id_b), has_agent_spoken=has_agent_spoken
+            )
 
-            if role == "system":
-                system_prompt = html.escape(content)
+            if kind == "system":
+                system_prompt = html.escape(clean_text)
                 continue
 
-            # Stop rendering chat bubbles when the final secret decision prompt begins
-            if role == "user" and content.startswith("[JUDGE]: Now the other agent can't listen to you"):
+            if kind == "judge_close":
                 break
 
-            if role == "user" and content.startswith("[JUDGE]:"):
-                clean_judge = html.escape(content.replace("[JUDGE]:", "", 1).strip())
+            if kind == "judge_open":
                 bubbles_html.append(f"""
                 <div class="msg-row msg-center">
-                    <div class="bubble bubble-judge">JUDGE: {clean_judge}</div>
+                    <div class="bubble bubble-judge">JUDGE: {html.escape(clean_text)}</div>
                 </div>
                 """)
-            elif role == "assistant":
-                clean_a = html.escape(content.strip())
+                continue
+
+            if kind not in {"agent_a", "agent_b"}:
+                continue
+
+            has_agent_spoken = True
+            turn_counter += 1
+
+            if kind == "agent_a":
                 bubbles_html.append(f"""
                 <div class="msg-row msg-left">
-                    <div class="msg-sender">Agent A (ID: {html.escape(str(id_a))}){init_tag_a}</div>
-                    <div class="bubble bubble-a">{clean_a}</div>
+                    <div class="msg-sender">Turn {turn_counter} &bull; Player A (ID: {html.escape(str(id_a))}){init_tag_a}</div>
+                    <div class="bubble bubble-a">{html.escape(clean_text)}</div>
                 </div>
                 """)
-            elif role == "user" and content.startswith("[AGENT]:"):
-                clean_b = html.escape(content.replace("[AGENT]:", "", 1).strip())
+            else:
                 bubbles_html.append(f"""
                 <div class="msg-row msg-right">
-                    <div class="msg-sender">Agent B (ID: {html.escape(str(id_b))}){init_tag_b}</div>
-                    <div class="bubble bubble-b">{clean_b}</div>
+                    <div class="msg-sender">Turn {turn_counter} &bull; Player B (ID: {html.escape(str(id_b))}){init_tag_b}</div>
+                    <div class="bubble bubble-b">{html.escape(clean_text)}</div>
                 </div>
                 """)
 
@@ -774,7 +876,6 @@ class ChatReport:
         timestamp = html.escape(str(rec.get("time", "")))
         game_name = html.escape(str(rec.get("game", "unknown")))
 
-        # Determine filter category and header badge
         if act_a == "[ERROR]" or act_b == "[ERROR]":
             category = "ERROR"
             outcome_badge = '<span class="badge badge-error">PARSING ERROR</span>'
@@ -791,6 +892,9 @@ class ChatReport:
         sys_prompt, chat_html = self._render_conversation_bubbles(
             rec.get("full_conversation", []), id_a, id_b, first_id
         )
+
+        init_lane_a = ' <span class="badge badge-initiator">Initiator</span>' if str(first_id) == str(id_a) else ""
+        init_lane_b = ' <span class="badge badge-initiator">Initiator</span>' if str(first_id) == str(id_b) else ""
 
         sys_block = f"""
         <details class="sys-prompt">
@@ -809,13 +913,17 @@ class ChatReport:
                 <div>{outcome_badge}</div>
             </div>
             {sys_block}
+            <div class="chat-lanes-bar">
+                <span class="lane-label-a">&larr; Player A (ID: {html.escape(str(id_a))}){init_lane_a}</span>
+                <span class="lane-label-b">Player B (ID: {html.escape(str(id_b))}){init_lane_b} &rarr;</span>
+            </div>
             <div class="chat-box">
                 {chat_html}
             </div>
             <div class="verdict-grid">
                 <div class="verdict-card">
                     <div class="verdict-top">
-                        <strong>Agent A (ID: {html.escape(str(id_a))})</strong>
+                        <strong>Player A (ID: {html.escape(str(id_a))})</strong>
                         <div>
                             {self._action_badge(act_a)}
                             <span class="payoff-pill">Payoff: {pay_a}</span>
@@ -825,7 +933,7 @@ class ChatReport:
                 </div>
                 <div class="verdict-card">
                     <div class="verdict-top">
-                        <strong>Agent B (ID: {html.escape(str(id_b))})</strong>
+                        <strong>Player B (ID: {html.escape(str(id_b))})</strong>
                         <div>
                             {self._action_badge(act_b)}
                             <span class="payoff-pill">Payoff: {pay_b}</span>
@@ -896,3 +1004,20 @@ class ChatReport:
 
         print(f"HTML conversation report saved to '{output_path}'.")
         return output_path
+
+
+if __name__ == "__main__":  
+    # Create a new dataset from the response history
+    dataset = DataSet("data/response_history.json")
+
+    # Run all analyses on the dataset and export results to the "reports" directory
+    stats_engine = StatsEngine(dataset)
+    stats_engine.run_all_analyses(export_dir="reports")
+    
+    # Generate graphs from the dataset
+    graphs = Graphs(dataset, output_dir="reports")
+    graphs.generate_all_graphs()
+
+    # Generate HTML report
+    chat_report = ChatReport(dataset, output_dir="reports")
+    chat_report.generate_html_report()
