@@ -1,0 +1,22 @@
+\section{Strategic Setting \& System Architecture}
+\subsection{Game-Theoretic Formulation}
+The normal-form game is defined by a tuple \( G = (N, A, u) \), where:
+\begin{itemize}
+    \item \( N \) is the set of players (agents) involved in the game.
+    \item \( A = A_1 \times A_2 \times \ldots \times A_n \) is the set of action profiles, where \( A_i \) is the set of actions available to player \( i \).
+    \item \( u = (u_1, u_2, \ldots, u_n) \) is the vector of utility functions, where \( u_i: A \rightarrow \mathbb{R} \) maps each action profile to a real-valued payoff for player \( i \).
+\end{itemize}
+A Nash equilibrium is a strategy profile \( (a_1^*, a_2^*, \ldots, a_n^*) \) such that no player can unilaterally deviate and improve their payoff, i.e., for all \( i \in N \):
+\[ u_i(a_i^*, a_{-i}^*) \geq u_i(a_i, a_{-i}^*) \quad \forall a_i \in A_i \]
+A strategy profile is Pareto-optimal if there is no other profile that makes at least one player better off without making any other player worse off.
+\subsection{Three-Phase Interaction Protocol}
+The project is set up as an exploratory analysis, implementing a reproducibility pipeline that allows for systematic experimentation. There are three phases in the program execution:
+\begin{enumerate}
+    \item \textbf{Rule of Engagement:} Agents are introduced to the rules of the game and the strategic environment in which they will operate. This phase ensures that all agents have a clear understanding of the game structure and their potential payoffs.
+    \item \textbf{Communication Phase:} Agents are allowed to communicate using natural language before making their strategic decisions. This phase is designed to observe how communication influences their choices.
+    \item \textbf{Choice Phase:} Agents make their strategic decisions based on the information gathered during the communication phase. The outcomes of these decisions are then analyzed to assess the impact of communication on cooperation and defection incentives.
+\end{enumerate}
+\subsection{Experimental Setup \& Reproducibility}
+This process are repeated across multiple iterations to gather sufficient data for analysis. Both models are the same and the model that starts the conversation is randomly selected.
+All the supported games are stored in a JSON file, which is read by the program to set up the game environment. The models are loaded from a local LLM backend (e.g., gemma4 via Ollama), and the program includes parsing and fallback safeguards to ensure robustness. The number of simulated matches per game is configurable, and all relevant artifacts, including communication logs and decision outcomes, are logged for reproducibility and further analysis.
+After all matches are completed, the program aggregates the results and generates a comprehensive report that includes statistical analyses, visualizations, and insights into the role of natural-language communication in strategic multi-agent interactions.
