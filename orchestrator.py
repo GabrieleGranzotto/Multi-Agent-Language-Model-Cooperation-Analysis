@@ -43,7 +43,6 @@ class Orchestrator:
             payoffA, payoffB = 0, 0
         self.result_data = [(strategyA, strategyB), (payoffA, payoffB), (explA, explB), first_agent.id]
         self._add_to_response_history()
-        self.result()
 
     def _talking_phase(self, first_agent: OllamaAgent, other_agent: OllamaAgent):
         message = "Starting the conversation. Please discuss your strategy for the game."
@@ -63,10 +62,10 @@ class Orchestrator:
         strategyA, strategyB = self.result_data[0]
         payoffA, payoffB = self.result_data[1]
         explA, explB = self.result_data[2]
-        print(f"Agent A chose: {strategyA}, Explanation: {explA}")
-        print(f"Agent B chose: {strategyB}, Explanation: {explB}")
-        print(f"Game resolved. Payoffs:")
-        print(f"Agent A: {payoffA}, Agent B: {payoffB}")
+        print(f"Agent A chose: {strategyA} \nExplanation: {explA}\n\n")
+        print(f"Agent B chose: {strategyB} \nExplanation: {explB}\n\n")
+        print(f"Game resolved. \nPayoffs:")
+        print(f"Agent A: {payoffA}, \nAgent B: {payoffB}")
 
     def _add_to_response_history(self):
         """
