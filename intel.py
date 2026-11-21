@@ -9,7 +9,7 @@ from scipy import stats
 def _classify_message(msg: dict, id_a: str = "", id_b: str = "", has_agent_spoken: bool = False) -> tuple[str, str]:
     """
     Classify a raw conversation message into ('system' | 'judge_open' | 'judge_close' | 'agent_a' | 'agent_b' | 'skip', cleaned_text).
-    Supports both Agent-A-perspective histories ('assistant' vs 'user' with/without '[AGENT]:')
+    Supports both Agent-A-perspective histories ('assistant' vs 'user' with/without '[AGENT]:' or '[ID]:')
     and explicit speaker metadata ('sender', 'agent_id', 'speaker_id', 'name').
     """
     role = str(msg.get("role", "")).strip().lower()
@@ -17,10 +17,11 @@ def _classify_message(msg: dict, id_a: str = "", id_b: str = "", has_agent_spoke
     stripped = raw_content.strip()
 
     if role == "system":
-        return "system", stripped
+        clean_sys = re.sub(r"^\[SYSTEM\]\s*:?\s*", "", stripped, count=1, flags=re.IGNORECASE).strip()
+        return "system", clean_sys
 
-    if role == "judge" or stripped.startswith("[JUDGE]"):
-        clean_judge = re.sub(r"^\[JUDGE\]\s*:?\s*", "", stripped, count=1).strip()
+    if role == "judge" or re.match(r"^\[(?:SYSTEM_)?JUDGE\]", stripped, flags=re.IGNORECASE):
+        clean_judge = re.sub(r"^\[(?:SYSTEM_)?JUDGE\]\s*:?\s*", "", stripped, count=1, flags=re.IGNORECASE).strip()
         if has_agent_spoken:
             return "judge_close", clean_judge
         return "judge_open", clean_judge
@@ -34,13 +35,24 @@ def _classify_message(msg: dict, id_a: str = "", id_b: str = "", has_agent_spoke
         or ""
     ).strip()
 
-    clean_text = re.sub(r"^\[(?:AGENT|AGENT\s*[AB]|PLAYER\s*[AB])\]\s*:?\s*", "", stripped, count=1, flags=re.IGNORECASE).strip()
+    # Extract optional leading bracketed tag such as [4140]: or [AGENT]:
+    prefix_match = re.match(r"^\[([^\]]+)\]\s*:?\s*", stripped)
+    prefix_tag = prefix_match.group(1).strip() if prefix_match else ""
 
-    if speaker_meta:
-        meta_upper = speaker_meta.upper()
-        if (id_a and speaker_meta == str(id_a)) or meta_upper in {"A", "AGENT A", "AGENT_A", "PLAYER A", "PLAYER_A"}:
+    clean_text = re.sub(
+        r"^\[(?:AGENT|AGENT\s*[AB]|PLAYER\s*[AB]|\d+)\]\s*:?\s*",
+        "",
+        stripped,
+        count=1,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    effective_speaker = speaker_meta or prefix_tag
+    if effective_speaker:
+        meta_upper = effective_speaker.upper()
+        if (id_a and effective_speaker == str(id_a)) or meta_upper in {"A", "AGENT A", "AGENT_A", "PLAYER A", "PLAYER_A"}:
             return "agent_a", clean_text
-        if (id_b and speaker_meta == str(id_b)) or meta_upper in {"B", "AGENT B", "AGENT_B", "PLAYER B", "PLAYER_B"}:
+        if (id_b and effective_speaker == str(id_b)) or meta_upper in {"B", "AGENT B", "AGENT_B", "PLAYER B", "PLAYER_B"}:
             return "agent_b", clean_text
 
     # Standard Agent-A-centric role mapping
@@ -52,9 +64,51 @@ def _classify_message(msg: dict, id_a: str = "", id_b: str = "", has_agent_spoke
     return "skip", clean_text
 
 
+def _extract_diplomatic_messages(
+    messages: list, id_a: str = "", id_b: str = "", max_exchanges: int = 5
+) -> tuple[str, str, list[dict], int]:
+    """
+    Extract and normalize the diplomatic conversation history before the closing [JUDGE] prompt.
+    Trims any unreciprocated trailing message beyond `max_exchanges` full Agent A / Agent B exchanges
+    (resolving the 10 vs 11 messages off-by-one asymmetry) and assigns an exchange-based turn index
+    (1 exchange = 1 pair of replies -> max `max_exchanges` turns, or fewer on early termination).
+    """
+    system_prompt = ""
+    judge_open = ""
+    agent_msgs = []
+    has_agent_spoken = False
+
+    for msg in messages:
+        kind, clean_text = _classify_message(
+            msg, id_a=str(id_a), id_b=str(id_b), has_agent_spoken=has_agent_spoken
+        )
+        if kind == "system":
+            system_prompt = clean_text
+        elif kind == "judge_open":
+            judge_open = clean_text
+        elif kind == "judge_close":
+            break
+        elif kind in {"agent_a", "agent_b"}:
+            has_agent_spoken = True
+            agent_msgs.append({"speaker": kind, "text": clean_text})
+
+    # Cap at `max_exchanges * 2` individual messages so 10- and 11-message logs both yield 5 exchanges
+    max_messages = max_exchanges * 2
+    if len(agent_msgs) > max_messages:
+        agent_msgs = agent_msgs[:max_messages]
+
+    # Count turns per A/B exchange pair rather than per individual reply
+    for idx, item in enumerate(agent_msgs):
+        item["turn"] = (idx // 2) + 1
+
+    total_turns = (len(agent_msgs) + 1) // 2
+    return system_prompt, judge_open, agent_msgs, total_turns
+
+
 class DataSet:
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str, max_exchanges: int = 5):
         self.file_path = file_path
+        self.max_exchanges = max_exchanges
         self.raw_records = []
         self.df = self.load_data()
         self.error_rate = round(float(self.df["has_error"].mean() * 100), 2)
@@ -86,9 +140,12 @@ class DataSet:
             has_error = (act_a == "[ERROR]") or (act_b == "[ERROR]")
             joint_outcome = "ERROR" if has_error else f"{act_a} / {act_b}"
 
-            # Compute diplomatic verbosity (excluding system prompt and JUDGE messages)
-            words_a, words_b = self._extract_diplomatic_word_counts(
-                rec.get("full_conversation", []), id_a=str(id_a), id_b=str(id_b)
+            # Compute diplomatic verbosity and normalized exchange turns (excluding system prompt and JUDGE messages)
+            words_a, words_b, msgs_a, msgs_b, turns = self._extract_diplomatic_metrics(
+                rec.get("full_conversation", []),
+                id_a=str(id_a),
+                id_b=str(id_b),
+                max_exchanges=self.max_exchanges,
             )
 
             rows.append({
@@ -105,8 +162,13 @@ class DataSet:
                 "expl_A": rec["agentA"]["explanation"],
                 "expl_B": rec["agentB"]["explanation"],
                 "first_speaker": "Agent A" if first_id == id_a else ("Agent B" if first_id == id_b else "Unknown"),
+                "turns": turns,
+                "msgs_A": msgs_a,
+                "msgs_B": msgs_b,
                 "words_A": words_a,
                 "words_B": words_b,
+                "words_per_turn_A": round(words_a / max(msgs_a, 1), 2),
+                "words_per_turn_B": round(words_b / max(msgs_b, 1), 2),
                 "total_words": words_a + words_b,
                 "has_error": has_error
             })
@@ -114,25 +176,29 @@ class DataSet:
         return pd.DataFrame(rows)
 
     @staticmethod
-    def _extract_diplomatic_word_counts(messages: list, id_a: str = "", id_b: str = "") -> tuple[int, int]:
+    def _extract_diplomatic_metrics(
+        messages: list, id_a: str = "", id_b: str = "", max_exchanges: int = 5
+    ) -> tuple[int, int, int, int, int]:
         """
-        Count the words exchanged by both agents during the diplomatic phase only,
-        stopping the count before the closing [JUDGE] intervention.
+        Count the words exchanged by both agents, individual message counts, and the total
+        number of A/B exchanges during the balanced diplomatic phase only, stopping before the closing [JUDGE] intervention.
         """
+        _, _, agent_msgs, total_turns = _extract_diplomatic_messages(
+            messages, id_a=id_a, id_b=id_b, max_exchanges=max_exchanges
+        )
         words_a = 0
         words_b = 0
-        has_agent_spoken = False
-        for msg in messages:
-            kind, clean_text = _classify_message(msg, id_a=id_a, id_b=id_b, has_agent_spoken=has_agent_spoken)
-            if kind == "judge_close":
-                break
-            if kind == "agent_a":
-                words_a += len(clean_text.split())
-                has_agent_spoken = True
-            elif kind == "agent_b":
-                words_b += len(clean_text.split())
-                has_agent_spoken = True
-        return words_a, words_b
+        msgs_a = 0
+        msgs_b = 0
+        for item in agent_msgs:
+            clean_words = re.sub(r"\[DONE\]", "", item["text"], flags=re.IGNORECASE).split()
+            if item["speaker"] == "agent_a":
+                words_a += len(clean_words)
+                msgs_a += 1
+            elif item["speaker"] == "agent_b":
+                words_b += len(clean_words)
+                msgs_b += 1
+        return words_a, words_b, msgs_a, msgs_b, total_turns
 
     def _get_valid_df(self) -> pd.DataFrame:
         """Return only matches without parsing errors."""
@@ -149,6 +215,8 @@ class DataSet:
             "action": valid_df["action_A"],
             "payoff": valid_df["payoff_A"],
             "words": valid_df["words_A"],
+            "words_per_turn": valid_df["words_per_turn_A"],
+            "turns": valid_df["turns"],
             "is_initiator": valid_df["first_speaker"] == "Agent A"
         })
         df_b = pd.DataFrame({
@@ -157,6 +225,8 @@ class DataSet:
             "action": valid_df["action_B"],
             "payoff": valid_df["payoff_B"],
             "words": valid_df["words_B"],
+            "words_per_turn": valid_df["words_per_turn_B"],
+            "turns": valid_df["turns"],
             "is_initiator": valid_df["first_speaker"] == "Agent B"
         })
         return pd.concat([df_a, df_b], ignore_index=True)
@@ -275,18 +345,19 @@ class StatsEngine:
 
     def _test_verbosity_correlation(self, long_df: pd.DataFrame) -> dict:
         """
-        Point-biserial correlation between diplomatic verbosity (word count)
+        Point-biserial correlation between normalized diplomatic verbosity (words per turn)
         and strategy choice (binary-encoded).
         """
         actions = sorted(long_df["action"].unique())
-        if len(actions) < 2 or long_df["words"].std() == 0:
+        if len(actions) < 2 or long_df["words_per_turn"].std() == 0:
             return {"note": "Insufficient variance to calculate correlation with verbosity."}
 
         target_action = "DEFECT" if "DEFECT" in actions else actions[1]
         binary_target = (long_df["action"] == target_action).astype(int)
 
-        r_pb, p_val = stats.pointbiserialr(binary_target, long_df["words"])
+        r_pb, p_val = stats.pointbiserialr(binary_target, long_df["words_per_turn"])
         return {
+            "metric": "words_per_turn",
             "target_action": target_action,
             "point_biserial_r": round(float(r_pb), 4),
             "p_value": round(float(p_val), 4),
@@ -309,7 +380,10 @@ class StatsEngine:
             "meta": {
                 "total_games": len(self.dataset.df),
                 "valid_games": len(valid_df),
-                "parsing_error_rate_pct": self.dataset.error_rate
+                "parsing_error_rate_pct": self.dataset.error_rate,
+                "mean_exchange_turns": round(float(valid_df["turns"].mean()), 2),
+                "min_exchange_turns": int(valid_df["turns"].min()),
+                "max_exchange_turns": int(valid_df["turns"].max()),
             },
             "action_rates_pct": self._compute_action_rates(long_df),
             "outcome_matrix_pct": self._compute_outcome_matrix(valid_df),
@@ -347,7 +421,8 @@ class StatsEngine:
         print("=" * 60)
         print(f"Total games: {self.results['meta']['total_games']} | "
               f"Valid: {self.results['meta']['valid_games']} | "
-              f"Parsing errors: {self.results['meta']['parsing_error_rate_pct']}%")
+              f"Parsing errors: {self.results['meta']['parsing_error_rate_pct']}% | "
+              f"Avg turns (exchanges): {self.results['meta']['mean_exchange_turns']}")
         print("\n--- Choice Rates (%) ---")
         print(self.results["action_rates_pct"])
         print("\n--- Joint Outcomes Matrix (% of total) ---")
@@ -403,72 +478,71 @@ class Graphs:
         plt.savefig(os.path.join(self.output_dir, "outcome_matrix_heatmap.png"), dpi=300)
         plt.close()
 
-    def _plot_payoff_distribution(self, long_df: pd.DataFrame):
+    def _plot_verbosity_vs_action(self, long_df: pd.DataFrame):
         """
-        Compare payoff distribution by chosen action and role using boxplot + stripplot.
+        Analyze the relationship between normalized diplomatic verbosity (words per turn)
+        and the final choice, overlaying empirical quartile rates on the logistic curve.
         """
-        plt.figure(figsize=(8, 5))
-        ax = sns.boxplot(
+        fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.2))
+
+        sns.boxplot(
             data=long_df,
             x="action",
-            y="payoff",
-            hue="role",
-            palette="Set2",
-            width=0.5,
-            fliersize=0
+            y="words_per_turn",
+            hue="action",
+            palette="Pastel1",
+            ax=axes[0],
+            width=0.45,
+            legend=False,
         )
         sns.stripplot(
             data=long_df,
             x="action",
-            y="payoff",
-            hue="role",
-            dodge=True,
-            palette="dark:black",
-            alpha=0.45,
+            y="words_per_turn",
+            color="black",
+            alpha=0.5,
             jitter=0.15,
-            legend=False,
-            ax=ax
+            ax=axes[0],
         )
-        ax.set_title("Payoff Distribution by Strategy and Role", fontsize=14, pad=12)
-        ax.set_xlabel("Selected Strategy", fontsize=12)
-        ax.set_ylabel("Obtained Payoff", fontsize=12)
-        plt.legend(title="Role")
-        plt.tight_layout()
-        plt.savefig(os.path.join(self.output_dir, "payoff_distribution.png"), dpi=300)
-        plt.close()
-
-    def _plot_verbosity_vs_action(self, long_df: pd.DataFrame):
-        """
-        Analyze the relationship between the number of words produced in the diplomatic phase and the final choice.
-        """
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-        sns.boxplot(data=long_df, x="action", y="words", hue="action", palette="Pastel1", ax=axes[0], width=0.45, legend=False)
-        sns.stripplot(data=long_df, x="action", y="words", color="black", alpha=0.5, jitter=0.15, ax=axes[0])
-        axes[0].set_title("Diplomatic Verbosity by Final Choice", fontsize=12)
+        axes[0].set_title("Diplomatic Verbosity per Turn by Final Choice", fontsize=12)
         axes[0].set_xlabel("Selected Strategy", fontsize=11)
-        axes[0].set_ylabel("Words written in the diplomatic phase", fontsize=11)
+        axes[0].set_ylabel("Mean words per turn (words / turns)", fontsize=11)
 
         actions = sorted(long_df["action"].unique())
-        if len(actions) >= 2 and long_df["words"].std() > 0:
+        if len(actions) >= 2 and long_df["words_per_turn"].std() > 0:
             target_action = "DEFECT" if "DEFECT" in actions else actions[1]
             temp = long_df.copy()
             temp["target_bin"] = (temp["action"] == target_action).astype(int)
             try:
                 sns.regplot(
                     data=temp,
-                    x="words",
+                    x="words_per_turn",
                     y="target_bin",
                     logistic=True,
                     ci=95,
-                    scatter_kws={"alpha": 0.4, "color": "#2b5c8f"},
-                    line_kws={"color": "#d95f02", "lw": 2},
-                    ax=axes[1]
+                    scatter_kws={"alpha": 0.3, "color": "#2b5c8f", "s": 28, "label": "Observed matches (0/1)"},
+                    line_kws={"color": "#d95f02", "lw": 2.2, "label": "Logistic fit (95% CI)"},
+                    ax=axes[1],
                 )
-                axes[1].set_title(f"Probability of '{target_action}' vs Verbosity", fontsize=12)
-                axes[1].set_xlabel("Words written in the diplomatic phase", fontsize=11)
+                temp["bin"] = pd.qcut(temp["words_per_turn"], q=4, duplicates="drop")
+                binned = temp.groupby("bin", observed=False).agg(
+                    x_mean=("words_per_turn", "mean"),
+                    y_rate=("target_bin", "mean"),
+                )
+                axes[1].scatter(
+                    binned["x_mean"],
+                    binned["y_rate"],
+                    color="#111827",
+                    marker="D",
+                    s=55,
+                    zorder=5,
+                    label="Quartile empirical rate",
+                )
+                axes[1].set_title(f"Probability of '{target_action}' vs Words per Turn", fontsize=12)
+                axes[1].set_xlabel("Mean words per turn (words / turns)", fontsize=11)
                 axes[1].set_ylabel(f"Probability P({target_action})", fontsize=11)
                 axes[1].set_ylim(-0.05, 1.05)
+                axes[1].legend(loc="upper left", fontsize=9, frameon=True)
             except RuntimeError:
                 axes[1].text(0.5, 0.5, "Install 'statsmodels' for logistic curve", ha="center", va="center")
                 axes[1].set_axis_off()
@@ -518,7 +592,6 @@ class Graphs:
         long_df = self.dataset.long_df
 
         self._plot_outcome_matrix(valid_df)
-        self._plot_payoff_distribution(long_df)
         self._plot_verbosity_vs_action(long_df)
         self._plot_first_mover_comparison(long_df)
         print(f"Graphs saved successfully in the folder '{self.output_dir}/'.")
@@ -805,47 +878,38 @@ class ChatReport:
             cls = "badge-error"
         return f'<span class="badge {cls}">{clean}</span>'
 
-    def _render_conversation_bubbles(self, messages: list, id_a: str, id_b: str, first_id: str) -> tuple[str, str]:
+    def _render_conversation_bubbles(
+        self, messages: list, id_a: str, id_b: str, first_id: str
+    ) -> tuple[str, str, int]:
         """
         Convert raw message history into strictly separated left/right HTML chat bubbles
-        (Player A on the left, Player B on the right) and extract the system prompt separately.
+        (Player A on the left, Player B on the right), extract the system prompt separately,
+        and label each Agent A / Agent B exchange pair with a single turn counter (1 to max_exchanges).
         """
-        system_prompt = ""
+        raw_sys, raw_judge, agent_msgs, total_turns = _extract_diplomatic_messages(
+            messages,
+            id_a=str(id_a),
+            id_b=str(id_b),
+            max_exchanges=self.dataset.max_exchanges,
+        )
+
+        system_prompt = html.escape(raw_sys) if raw_sys else ""
         bubbles_html = []
+
+        if raw_judge:
+            bubbles_html.append(f"""
+            <div class="msg-row msg-center">
+                <div class="bubble bubble-judge">JUDGE: {html.escape(raw_judge)}</div>
+            </div>
+            """)
 
         init_tag_a = '<span class="badge badge-initiator">Initiator</span>' if str(first_id) == str(id_a) else ""
         init_tag_b = '<span class="badge badge-initiator">Initiator</span>' if str(first_id) == str(id_b) else ""
 
-        has_agent_spoken = False
-        turn_counter = 0
-
-        for msg in messages:
-            kind, clean_text = _classify_message(
-                msg, id_a=str(id_a), id_b=str(id_b), has_agent_spoken=has_agent_spoken
-            )
-
-            if kind == "system":
-                system_prompt = html.escape(clean_text)
-                continue
-
-            if kind == "judge_close":
-                break
-
-            if kind == "judge_open":
-                bubbles_html.append(f"""
-                <div class="msg-row msg-center">
-                    <div class="bubble bubble-judge">JUDGE: {html.escape(clean_text)}</div>
-                </div>
-                """)
-                continue
-
-            if kind not in {"agent_a", "agent_b"}:
-                continue
-
-            has_agent_spoken = True
-            turn_counter += 1
-
-            if kind == "agent_a":
+        for item in agent_msgs:
+            turn_counter = item["turn"]
+            clean_text = item["text"]
+            if item["speaker"] == "agent_a":
                 bubbles_html.append(f"""
                 <div class="msg-row msg-left">
                     <div class="msg-sender">Turn {turn_counter} &bull; Player A (ID: {html.escape(str(id_a))}){init_tag_a}</div>
@@ -860,7 +924,7 @@ class ChatReport:
                 </div>
                 """)
 
-        return system_prompt, "\n".join(bubbles_html)
+        return system_prompt, "\n".join(bubbles_html), total_turns
 
     def _render_match_card(self, idx: int, rec: dict) -> str:
         """Render a single simulation match as a complete HTML card."""
@@ -889,7 +953,7 @@ class ChatReport:
             category = "ASYMMETRIC"
             outcome_badge = f'<span class="badge badge-mixed">{html.escape(act_a)} / {html.escape(act_b)}</span>'
 
-        sys_prompt, chat_html = self._render_conversation_bubbles(
+        sys_prompt, chat_html, total_turns = self._render_conversation_bubbles(
             rec.get("full_conversation", []), id_a, id_b, first_id
         )
 
@@ -908,7 +972,7 @@ class ChatReport:
             <div class="match-header">
                 <div>
                     <span class="match-title">Match #{idx + 1}</span>
-                    <span class="match-sub"> &bull; {game_name} &bull; {timestamp}</span>
+                    <span class="match-sub"> &bull; {game_name} &bull; {timestamp} &bull; {total_turns} turns</span>
                 </div>
                 <div>{outcome_badge}</div>
             </div>
