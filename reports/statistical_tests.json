@@ -1,0 +1,44 @@
+{
+    "meta": {
+        "total_games": 114,
+        "valid_games": 114,
+        "parsing_error_rate_pct": 0.0,
+        "mean_exchange_turns": 3.16,
+        "min_exchange_turns": 2,
+        "max_exchange_turns": 5
+    },
+    "chi_square_tests": {
+        "role_vs_action": {
+            "chi2": 0.1714,
+            "p_value": 0.6789,
+            "dof": 1,
+            "significant_005": false
+        },
+        "first_mover_vs_action": {
+            "chi2": 0.019,
+            "p_value": 0.8902,
+            "dof": 1,
+            "significant_005": false
+        }
+    },
+    "symmetry_binomial_test": {
+        "asymmetric_games": 24,
+        "agentA_exploits_count": 10,
+        "agentB_exploits_count": 14,
+        "p_value": 0.5413,
+        "significant_asymmetry_005": false
+    },
+    "payoff_mann_whitney_test": {
+        "compared_actions": "COOPERATE vs DEFECT",
+        "u_statistic": 7076.0,
+        "p_value": 0.0122,
+        "significant_005": true
+    },
+    "verbosity_correlation_test": {
+        "metric": "words_per_turn",
+        "target_action": "DEFECT",
+        "point_biserial_r": 0.0928,
+        "p_value": 0.1626,
+        "significant_005": false
+    }
+}
