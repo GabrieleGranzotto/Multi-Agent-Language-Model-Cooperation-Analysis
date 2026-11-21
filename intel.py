@@ -110,10 +110,12 @@ class DataSet:
         self.file_path = file_path
         self.max_exchanges = max_exchanges
         self.raw_records = []
+        self._raw_turn_records = []
         self.df = self.load_data()
         self.error_rate = round(float(self.df["has_error"].mean() * 100), 2)
         self.valid_df = self._get_valid_df()
         self.long_df = self._build_long_agent_df(self.valid_df) if not self.valid_df.empty else pd.DataFrame()
+        self.turn_df = self._build_turn_df(self.valid_df) if not self.valid_df.empty else pd.DataFrame()
 
     def load_data(self) -> pd.DataFrame:
         """
@@ -130,7 +132,9 @@ class DataSet:
             raise ValueError(f"The file {self.file_path} is empty.")
 
         rows = []
+        self._raw_turn_records = []
         for idx, rec in enumerate(self.raw_records):
+            match_id = idx + 1
             act_a = rec["agentA"]["answer"]
             act_b = rec["agentB"]["answer"]
             id_a = rec["agentA"]["id"]
@@ -148,8 +152,43 @@ class DataSet:
                 max_exchanges=self.max_exchanges,
             )
 
+            # Extract [DONE] token occurrences, termination timing, and per-turn message lengths
+            done_a, done_b, first_done_turn, msg_turns = self._extract_done_and_turn_details(
+                rec.get("full_conversation", []),
+                id_a=str(id_a),
+                id_b=str(id_b),
+                max_exchanges=self.max_exchanges,
+            )
+
+            for item in msg_turns:
+                self._raw_turn_records.append({
+                    "match_id": match_id,
+                    "turn": item["turn"],
+                    "role": "Agent A" if item["speaker"] == "agent_a" else "Agent B",
+                    "action": act_a if item["speaker"] == "agent_a" else act_b,
+                    "joint_outcome": joint_outcome,
+                    "words": item["words"],
+                    "done_count": item["done_count"],
+                    "has_done": item["done_count"] > 0,
+                    "has_error": has_error,
+                })
+
+            total_words = words_a + words_b
+            total_done = done_a + done_b
+            has_done_a = done_a > 0
+            has_done_b = done_b > 0
+            has_done = total_done > 0
+
+            # Classify how the diplomatic negotiation ended
+            if has_done_a and has_done_b:
+                termination_type = "Mutual [DONE]"
+            elif has_done_a or has_done_b:
+                termination_type = "Unilateral [DONE]"
+            else:
+                termination_type = "Max Turns (No [DONE])"
+
             rows.append({
-                "match_id": idx + 1,
+                "match_id": match_id,
                 "time": rec.get("time"),
                 "game": rec.get("game"),
                 "agentA_id": id_a,
@@ -169,7 +208,19 @@ class DataSet:
                 "words_B": words_b,
                 "words_per_turn_A": round(words_a / max(msgs_a, 1), 2),
                 "words_per_turn_B": round(words_b / max(msgs_b, 1), 2),
-                "total_words": words_a + words_b,
+                "total_words": total_words,
+                "avg_exchange_words": round(total_words / max(turns, 1), 2),
+                "done_count_A": done_a,
+                "done_count_B": done_b,
+                "total_done": total_done,
+                "has_done_A": has_done_a,
+                "has_done_B": has_done_b,
+                "has_done": has_done,
+                "first_done_turn": first_done_turn if first_done_turn is not None else np.nan,
+                "termination_type": termination_type,
+                "done_per_100_words": round((total_done / total_words) * 100, 3) if total_words > 0 else 0.0,
+                "done_per_100_words_A": round((done_a / words_a) * 100, 3) if words_a > 0 else 0.0,
+                "done_per_100_words_B": round((done_b / words_b) * 100, 3) if words_b > 0 else 0.0,
                 "has_error": has_error
             })
 
@@ -200,6 +251,41 @@ class DataSet:
                 msgs_b += 1
         return words_a, words_b, msgs_a, msgs_b, total_turns
 
+    @staticmethod
+    def _extract_done_and_turn_details(
+        messages: list, id_a: str = "", id_b: str = "", max_exchanges: int = 5
+    ) -> tuple[int, int, int | None, list[dict]]:
+        """
+        Extract per-agent [DONE] counts, the first exchange turn where [DONE] appears,
+        and per-message word counts across the balanced diplomatic phase.
+        """
+        _, _, agent_msgs, _ = _extract_diplomatic_messages(
+            messages, id_a=id_a, id_b=id_b, max_exchanges=max_exchanges
+        )
+        done_a = 0
+        done_b = 0
+        first_done_turn = None
+        msg_turns = []
+
+        for item in agent_msgs:
+            done_matches = re.findall(r"\[DONE\]", item["text"], flags=re.IGNORECASE)
+            d_cnt = len(done_matches)
+            clean_words = re.sub(r"\[DONE\]", "", item["text"], flags=re.IGNORECASE).split()
+            if d_cnt > 0 and first_done_turn is None:
+                first_done_turn = item["turn"]
+            if item["speaker"] == "agent_a":
+                done_a += d_cnt
+            elif item["speaker"] == "agent_b":
+                done_b += d_cnt
+            msg_turns.append({
+                "turn": item["turn"],
+                "speaker": item["speaker"],
+                "words": len(clean_words),
+                "done_count": d_cnt,
+            })
+
+        return done_a, done_b, first_done_turn, msg_turns
+
     def _get_valid_df(self) -> pd.DataFrame:
         """Return only matches without parsing errors."""
         return self.df[~self.df["has_error"]].copy()
@@ -209,6 +295,17 @@ class DataSet:
         Transform the DataFrame from match-level to agent-level (2 rows per match)
         to facilitate aggregated statistical tests.
         """
+        done_role_a = np.where(
+            valid_df["has_done_A"],
+            "Sent [DONE]",
+            np.where(valid_df["has_done_B"], "Partner Sent [DONE]", "No [DONE] (Max Turns)")
+        )
+        done_role_b = np.where(
+            valid_df["has_done_B"],
+            "Sent [DONE]",
+            np.where(valid_df["has_done_A"], "Partner Sent [DONE]", "No [DONE] (Max Turns)")
+        )
+
         df_a = pd.DataFrame({
             "match_id": valid_df["match_id"],
             "role": "Agent A",
@@ -217,7 +314,15 @@ class DataSet:
             "words": valid_df["words_A"],
             "words_per_turn": valid_df["words_per_turn_A"],
             "turns": valid_df["turns"],
-            "is_initiator": valid_df["first_speaker"] == "Agent A"
+            "is_initiator": valid_df["first_speaker"] == "Agent A",
+            "done_count": valid_df["done_count_A"],
+            "used_done": valid_df["has_done_A"],
+            "partner_used_done": valid_df["has_done_B"],
+            "match_has_done": valid_df["has_done"],
+            "termination_type": valid_df["termination_type"],
+            "done_role": done_role_a,
+            "done_per_100_words": valid_df["done_per_100_words_A"],
+            "first_done_turn": valid_df["first_done_turn"],
         })
         df_b = pd.DataFrame({
             "match_id": valid_df["match_id"],
@@ -227,9 +332,30 @@ class DataSet:
             "words": valid_df["words_B"],
             "words_per_turn": valid_df["words_per_turn_B"],
             "turns": valid_df["turns"],
-            "is_initiator": valid_df["first_speaker"] == "Agent B"
+            "is_initiator": valid_df["first_speaker"] == "Agent B",
+            "done_count": valid_df["done_count_B"],
+            "used_done": valid_df["has_done_B"],
+            "partner_used_done": valid_df["has_done_A"],
+            "match_has_done": valid_df["has_done"],
+            "termination_type": valid_df["termination_type"],
+            "done_role": done_role_b,
+            "done_per_100_words": valid_df["done_per_100_words_B"],
+            "first_done_turn": valid_df["first_done_turn"],
         })
         return pd.concat([df_a, df_b], ignore_index=True)
+
+    def _build_turn_df(self, valid_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Build a message-level DataFrame (one row per diplomatic message in valid matches)
+        enriched with the match termination category for turn-by-turn variance analysis.
+        """
+        if not self._raw_turn_records:
+            return pd.DataFrame()
+        raw_turns = pd.DataFrame(self._raw_turn_records)
+        valid_turns = raw_turns[~raw_turns["has_error"]].copy()
+        term_map = valid_df.set_index("match_id")["termination_type"]
+        valid_turns["termination_type"] = valid_turns["match_id"].map(term_map)
+        return valid_turns
 
 
 class StatsEngine:
@@ -265,6 +391,24 @@ class StatsEngine:
         temp["turn_role"] = np.where(temp["is_initiator"], "Initiator", "Responder")
         return (pd.crosstab(temp["turn_role"], temp["action"], normalize="index") * 100).round(2)
 
+    def _compute_termination_stats(self, valid_df: pd.DataFrame, long_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Compute match counts, share of matches, strategy rates, exchange length statistics,
+        and [DONE] word-proportional density across negotiation termination types.
+        """
+        match_agg = valid_df.groupby("termination_type").agg(
+            matches=("match_id", "count"),
+            mean_turns=("turns", "mean"),
+            std_turns=("turns", "std"),
+            mean_total_words=("total_words", "mean"),
+            mean_done_per_100_words=("done_per_100_words", "mean"),
+        )
+        match_agg["match_share_pct"] = (match_agg["matches"] / len(valid_df)) * 100
+
+        action_rates = pd.crosstab(long_df["termination_type"], long_df["action"], normalize="index") * 100
+        combined = match_agg.join(action_rates).fillna(0.0)
+        return combined.round(2)
+
     def _test_chi_square_independence(self, long_df: pd.DataFrame) -> dict:
         """
         Perform the Chi-square test of independence on:
@@ -299,6 +443,51 @@ class StatsEngine:
             }
         else:
             results["first_mover_vs_action"] = {"note": "Insufficient variance for Chi-square test."}
+
+        return results
+
+    def _test_termination_vs_action(self, long_df: pd.DataFrame) -> dict:
+        """
+        Test statistical association between negotiation termination type / [DONE] role
+        and chosen strategy, as well as [DONE] word-density differences across strategies.
+        """
+        results = {}
+
+        ct_term = pd.crosstab(long_df["termination_type"], long_df["action"])
+        if ct_term.shape[0] > 1 and ct_term.shape[1] > 1:
+            chi2, p_val, dof, _ = stats.chi2_contingency(ct_term)
+            results["termination_type_vs_action"] = {
+                "chi2": round(float(chi2), 4),
+                "p_value": round(float(p_val), 4),
+                "dof": int(dof),
+                "significant_005": bool(p_val < 0.05)
+            }
+        else:
+            results["termination_type_vs_action"] = {"note": "Insufficient variance for Chi-square test."}
+
+        ct_role = pd.crosstab(long_df["done_role"], long_df["action"])
+        if ct_role.shape[0] > 1 and ct_role.shape[1] > 1:
+            chi2, p_val, dof, _ = stats.chi2_contingency(ct_role)
+            results["done_role_vs_action"] = {
+                "chi2": round(float(chi2), 4),
+                "p_value": round(float(p_val), 4),
+                "dof": int(dof),
+                "significant_005": bool(p_val < 0.05)
+            }
+        else:
+            results["done_role_vs_action"] = {"note": "Insufficient variance for Chi-square test."}
+
+        actions = sorted(long_df["action"].unique())
+        if len(actions) >= 2:
+            g0 = long_df[long_df["action"] == actions[0]]["done_per_100_words"]
+            g1 = long_df[long_df["action"] == actions[1]]["done_per_100_words"]
+            u_stat, p_val = stats.mannwhitneyu(g0, g1, alternative="two-sided")
+            results["done_density_mann_whitney"] = {
+                "compared_actions": f"{actions[0]} vs {actions[1]}",
+                "u_statistic": round(float(u_stat), 4),
+                "p_value": round(float(p_val), 4),
+                "significant_005": bool(p_val < 0.05)
+            }
 
         return results
 
@@ -382,14 +571,19 @@ class StatsEngine:
                 "valid_games": len(valid_df),
                 "parsing_error_rate_pct": self.dataset.error_rate,
                 "mean_exchange_turns": round(float(valid_df["turns"].mean()), 2),
+                "std_exchange_turns": round(float(valid_df["turns"].std()), 2) if len(valid_df) > 1 else 0.0,
                 "min_exchange_turns": int(valid_df["turns"].min()),
                 "max_exchange_turns": int(valid_df["turns"].max()),
+                "done_termination_rate_pct": round(float(valid_df["has_done"].mean() * 100), 2),
+                "mean_done_per_100_words": round(float(valid_df["done_per_100_words"].mean()), 3),
             },
             "action_rates_pct": self._compute_action_rates(long_df),
             "outcome_matrix_pct": self._compute_outcome_matrix(valid_df),
             "payoff_stats": self._compute_payoff_stats(long_df),
             "first_mover_pct": self._compute_first_mover_stats(long_df),
+            "termination_stats": self._compute_termination_stats(valid_df, long_df),
             "chi_square_tests": self._test_chi_square_independence(long_df),
+            "termination_independence_test": self._test_termination_vs_action(long_df),
             "symmetry_binomial_test": self._test_symmetry_binomial(valid_df),
             "payoff_mann_whitney_test": self._test_payoff_differences(long_df),
             "verbosity_correlation_test": self._test_verbosity_correlation(long_df)
@@ -398,10 +592,12 @@ class StatsEngine:
         self.results["action_rates_pct"].to_csv(os.path.join(export_dir, "action_rates.csv"))
         self.results["outcome_matrix_pct"].to_csv(os.path.join(export_dir, "outcome_matrix.csv"))
         self.results["payoff_stats"].to_csv(os.path.join(export_dir, "payoff_stats.csv"))
+        self.results["termination_stats"].to_csv(os.path.join(export_dir, "termination_stats.csv"))
 
         stats_summary = {
             "meta": self.results["meta"],
             "chi_square_tests": self.results["chi_square_tests"],
+            "termination_independence_test": self.results["termination_independence_test"],
             "symmetry_binomial_test": self.results["symmetry_binomial_test"],
             "payoff_mann_whitney_test": self.results["payoff_mann_whitney_test"],
             "verbosity_correlation_test": self.results["verbosity_correlation_test"]
@@ -429,9 +625,12 @@ class StatsEngine:
         print(self.results["outcome_matrix_pct"])
         print("\n--- Payoff Statistics ---")
         print(self.results["payoff_stats"])
+        print("\n--- Termination Type Statistics ---")
+        print(self.results["termination_stats"])
         print("\n--- Statistical Tests ---")
         print(json.dumps({
             "chi_square": self.results["chi_square_tests"],
+            "termination_independence": self.results["termination_independence_test"],
             "symmetry_binomial": self.results["symmetry_binomial_test"],
             "payoff_mann_whitney": self.results["payoff_mann_whitney_test"],
             "verbosity_correlation": self.results["verbosity_correlation_test"]
@@ -578,6 +777,312 @@ class Graphs:
         plt.savefig(os.path.join(self.output_dir, "first_mover_impact.png"), dpi=300)
         plt.close()
 
+    def _plot_done_proportion_vs_words(self, valid_df: pd.DataFrame, long_df: pd.DataFrame):
+        """
+        Visualize [DONE] occurrence in proportion to spoken words:
+        - Left panel: proportion (%) of matches containing [DONE] across total word-count quartiles.
+        - Right panel: distribution of [DONE] density per 100 spoken words across final strategies.
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(13, 5.2))
+
+        if valid_df["total_words"].nunique() > 1:
+            temp_m = valid_df.copy()
+            temp_m["word_bin"] = pd.qcut(temp_m["total_words"], q=4, duplicates="drop")
+            bin_summary = temp_m.groupby("word_bin", observed=False).agg(
+                total_matches=("has_done", "count"),
+                done_matches=("has_done", "sum"),
+                done_pct=("has_done", lambda s: s.mean() * 100),
+            ).reset_index()
+            bin_summary["bin_label"] = [
+                f"Q{idx + 1}\n({int(iv.left)}–{int(iv.right)}w)"
+                for idx, iv in enumerate(bin_summary["word_bin"])
+            ]
+        else:
+            total_m = len(valid_df)
+            done_m = int(valid_df["has_done"].sum())
+            bin_summary = pd.DataFrame({
+                "bin_label": ["All Matches"],
+                "total_matches": [total_m],
+                "done_matches": [done_m],
+                "done_pct": [(done_m / max(total_m, 1)) * 100],
+            })
+
+        ax0 = sns.barplot(
+            data=bin_summary,
+            x="bin_label",
+            y="done_pct",
+            hue="bin_label",
+            dodge=False,
+            palette="Blues_d",
+            ax=axes[0],
+        )
+        if ax0.get_legend():
+            ax0.get_legend().remove()
+
+        for idx, row in bin_summary.iterrows():
+            ax0.text(
+                idx,
+                row["done_pct"] + 2.0,
+                f"{row['done_pct']:.1f}%\n({int(row['done_matches'])}/{int(row['total_matches'])})",
+                ha="center",
+                va="bottom",
+                fontsize=9.5,
+                fontweight="bold",
+            )
+        axes[0].set_ylim(0, 116)
+        axes[0].set_title("[DONE] Occurrence Rate by Match Word-Count Quartile", fontsize=12)
+        axes[0].set_xlabel("Total Diplomatic Word Count Quartile", fontsize=11)
+        axes[0].set_ylabel("Matches with [DONE] (%)", fontsize=11)
+
+        sns.boxplot(
+            data=long_df,
+            x="action",
+            y="done_per_100_words",
+            hue="action",
+            dodge=False,
+            palette="Set2",
+            width=0.45,
+            ax=axes[1],
+        )
+        if axes[1].get_legend():
+            axes[1].get_legend().remove()
+
+        sns.stripplot(
+            data=long_df,
+            x="action",
+            y="done_per_100_words",
+            color="black",
+            alpha=0.5,
+            jitter=0.15,
+            ax=axes[1],
+        )
+        axes[1].set_title("[DONE] Density per 100 Words by Chosen Strategy", fontsize=12)
+        axes[1].set_xlabel("Selected Strategy", fontsize=11)
+        axes[1].set_ylabel("[DONE] Count per 100 Spoken Words", fontsize=11)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, "done_proportion_vs_words.png"), dpi=300)
+        plt.close()
+
+    def _plot_termination_vs_cooperation(self, valid_df: pd.DataFrame, long_df: pd.DataFrame):
+        """
+        Analyze the relationship between negotiation termination mode and the choice to cooperate:
+        - Left panel: agent strategy rates across match termination categories.
+        - Right panel: agent strategy rates depending on whether the agent or partner emitted [DONE].
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.2))
+
+        term_order = [
+            t for t in ["Mutual [DONE]", "Unilateral [DONE]", "Max Turns (No [DONE])"]
+            if t in long_df["termination_type"].unique()
+        ]
+        ct_term = (pd.crosstab(long_df["termination_type"], long_df["action"], normalize="index") * 100).reindex(term_order)
+        term_counts = valid_df["termination_type"].value_counts()
+        ct_term.index = [f"{t}\n(n={term_counts.get(t, 0)} matches)" for t in ct_term.index]
+        melted_term = ct_term.reset_index().melt(id_vars="index", var_name="action", value_name="percentage")
+
+        ax0 = sns.barplot(data=melted_term, x="index", y="percentage", hue="action", palette="viridis", ax=axes[0])
+        for container in ax0.containers:
+            ax0.bar_label(container, fmt="%.1f%%", padding=3, fontsize=9.5)
+        axes[0].set_title("Strategy Choice by Match Termination Type", fontsize=12)
+        axes[0].set_xlabel("")
+        axes[0].set_ylabel("Agent Strategy Share (%)", fontsize=11)
+        axes[0].set_ylim(0, 114)
+        axes[0].legend(title="Strategy")
+
+        role_order = [
+            r for r in ["Sent [DONE]", "Partner Sent [DONE]", "No [DONE] (Max Turns)"]
+            if r in long_df["done_role"].unique()
+        ]
+        ct_role = (pd.crosstab(long_df["done_role"], long_df["action"], normalize="index") * 100).reindex(role_order)
+        role_counts = long_df["done_role"].value_counts()
+        ct_role.index = [f"{r}\n(n={role_counts.get(r, 0)} agents)" for r in ct_role.index]
+        melted_role = ct_role.reset_index().melt(id_vars="index", var_name="action", value_name="percentage")
+
+        ax1 = sns.barplot(data=melted_role, x="index", y="percentage", hue="action", palette="viridis", ax=axes[1])
+        for container in ax1.containers:
+            ax1.bar_label(container, fmt="%.1f%%", padding=3, fontsize=9.5)
+        axes[1].set_title("Strategy Choice by Agent [DONE] Role", fontsize=12)
+        axes[1].set_xlabel("")
+        axes[1].set_ylabel("Agent Strategy Share (%)", fontsize=11)
+        axes[1].set_ylim(0, 114)
+        axes[1].legend(title="Strategy")
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, "termination_vs_cooperation.png"), dpi=300)
+        plt.close()
+
+    def _plot_exchange_length_mean_variance(self, valid_df: pd.DataFrame, turn_df: pd.DataFrame):
+        """
+        Combine boxplots with explicit Mean (μ) and Variance/SD (σ², ±1 SD) overlays for exchange length:
+        - Left panel: number of exchanges (turns) per match grouped by joint outcome.
+        - Right panel: message word length across exchange turns (Turn 1 to Turn N).
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.4))
+
+        outcome_order = sorted(valid_df["joint_outcome"].unique())
+        sns.boxplot(
+            data=valid_df,
+            x="joint_outcome",
+            y="turns",
+            order=outcome_order,
+            hue="joint_outcome",
+            hue_order=outcome_order,
+            dodge=False,
+            palette="Pastel2",
+            width=0.45,
+            ax=axes[0],
+        )
+        if axes[0].get_legend():
+            axes[0].get_legend().remove()
+
+        sns.stripplot(
+            data=valid_df,
+            x="joint_outcome",
+            y="turns",
+            order=outcome_order,
+            color="#374151",
+            alpha=0.55,
+            jitter=0.14,
+            ax=axes[0],
+        )
+
+        stats_out = valid_df.groupby("joint_outcome")["turns"].agg(["mean", "std", "var"]).reindex(outcome_order).fillna(0.0)
+        x_pos = np.arange(len(outcome_order))
+        axes[0].errorbar(
+            x_pos,
+            stats_out["mean"],
+            yerr=stats_out["std"],
+            fmt="D",
+            color="#b91c1c",
+            ecolor="#b91c1c",
+            elinewidth=1.8,
+            capsize=5,
+            markersize=7,
+            zorder=6,
+            label="Mean ± 1 SD",
+        )
+        y_max_0 = max(valid_df["turns"].max(), (stats_out["mean"] + stats_out["std"]).max())
+        for idx, row in enumerate(stats_out.itertuples()):
+            axes[0].text(
+                idx,
+                y_max_0 + 0.22,
+                f"μ={row.mean:.2f}\nσ²={row.var:.2f}",
+                ha="center",
+                va="bottom",
+                fontsize=8.8,
+                color="#111827",
+                fontweight="bold",
+            )
+        axes[0].set_ylim(0.5, y_max_0 + 1.15)
+        axes[0].set_title("Exchange Count (Turns): Boxplot, Mean & Variance by Outcome", fontsize=11.5)
+        axes[0].set_xlabel("Joint Match Outcome", fontsize=11)
+        axes[0].set_ylabel("Number of Exchanges (Turns)", fontsize=11)
+        axes[0].legend(loc="lower right", fontsize=9)
+
+        if not turn_df.empty:
+            turn_order = sorted(turn_df["turn"].unique())
+            sns.boxplot(
+                data=turn_df,
+                x="turn",
+                y="words",
+                order=turn_order,
+                hue="turn",
+                hue_order=turn_order,
+                dodge=False,
+                palette="Blues",
+                width=0.48,
+                ax=axes[1],
+            )
+            if axes[1].get_legend():
+                axes[1].get_legend().remove()
+
+            stats_turn = turn_df.groupby("turn")["words"].agg(["mean", "std", "var"]).reindex(turn_order).fillna(0.0)
+            x_pos_t = np.arange(len(turn_order))
+            axes[1].errorbar(
+                x_pos_t,
+                stats_turn["mean"],
+                yerr=stats_turn["std"],
+                fmt="-D",
+                color="#d95f02",
+                ecolor="#d95f02",
+                elinewidth=1.6,
+                capsize=4,
+                markersize=6,
+                zorder=6,
+                label="Mean ± 1 SD",
+            )
+            y_max_1 = max(turn_df["words"].max(), (stats_turn["mean"] + stats_turn["std"]).max())
+            for idx, row in enumerate(stats_turn.itertuples()):
+                axes[1].text(
+                    idx,
+                    y_max_1 + max(0.8, y_max_1 * 0.03),
+                    f"μ={row.mean:.1f}\nσ²={row.var:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8.5,
+                    color="#111827",
+                )
+            axes[1].set_ylim(0, y_max_1 + max(4.0, y_max_1 * 0.20))
+            axes[1].set_title("Message Word Length Across Turns: Boxplot, Mean & Variance", fontsize=11.5)
+            axes[1].set_xlabel("Exchange Turn Index", fontsize=11)
+            axes[1].set_ylabel("Words per Message", fontsize=11)
+            axes[1].legend(loc="upper right", fontsize=9)
+        else:
+            axes[1].text(0.5, 0.5, "No turn-level message data available", ha="center", va="center")
+            axes[1].set_axis_off()
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, "exchange_length_mean_variance.png"), dpi=300)
+        plt.close()
+
+    def _plot_done_timing_and_turn_trajectory(self, turn_df: pd.DataFrame):
+        """
+        Explore temporal negotiation dynamics across turns:
+        - Left panel: distribution of exchange turns at which [DONE] is emitted by final strategy.
+        - Right panel: turn-by-turn message length trajectory (Mean ± 1 SD) by final strategy.
+        """
+        if turn_df.empty:
+            return
+
+        fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.2))
+        turn_order = sorted(turn_df["turn"].unique())
+        done_turns = turn_df[turn_df["has_done"]]
+
+        if not done_turns.empty:
+            ct_timing = pd.crosstab(done_turns["turn"], done_turns["action"]).reindex(turn_order, fill_value=0)
+            melted_timing = ct_timing.reset_index().melt(id_vars="turn", var_name="action", value_name="count")
+            ax0 = sns.barplot(data=melted_timing, x="turn", y="count", hue="action", palette="Set1", ax=axes[0])
+            for container in ax0.containers:
+                ax0.bar_label(container, padding=2, fontsize=9)
+            axes[0].set_title("[DONE] Emission Timing Across Exchange Turns", fontsize=12)
+            axes[0].set_xlabel("Exchange Turn Index", fontsize=11)
+            axes[0].set_ylabel("Count of [DONE] Messages", fontsize=11)
+            axes[0].legend(title="Final Strategy")
+        else:
+            axes[0].text(0.5, 0.5, "No [DONE] tokens emitted in valid matches", ha="center", va="center")
+            axes[0].set_axis_off()
+
+        for act, grp in turn_df.groupby("action"):
+            agg_t = grp.groupby("turn")["words"].agg(["mean", "std"]).reindex(turn_order).fillna(0.0)
+            axes[1].plot(turn_order, agg_t["mean"], marker="o", linewidth=2.2, label=f"{act} (Mean)")
+            axes[1].fill_between(
+                turn_order,
+                np.maximum(0, agg_t["mean"] - agg_t["std"]),
+                agg_t["mean"] + agg_t["std"],
+                alpha=0.18,
+                label=f"{act} (±1 SD)",
+            )
+        axes[1].set_xticks(turn_order)
+        axes[1].set_title("Turn-by-Turn Message Length Trajectory (Mean ± 1 SD)", fontsize=12)
+        axes[1].set_xlabel("Exchange Turn Index", fontsize=11)
+        axes[1].set_ylabel("Words per Message", fontsize=11)
+        axes[1].legend(fontsize=8.5, frameon=True)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, "done_timing_and_turn_trajectory.png"), dpi=300)
+        plt.close()
+
     def generate_all_graphs(self):
         """
         Collector that runs all private graph generation methods
@@ -590,10 +1095,15 @@ class Graphs:
             return
 
         long_df = self.dataset.long_df
+        turn_df = self.dataset.turn_df
 
         self._plot_outcome_matrix(valid_df)
         self._plot_verbosity_vs_action(long_df)
         self._plot_first_mover_comparison(long_df)
+        self._plot_done_proportion_vs_words(valid_df, long_df)
+        self._plot_termination_vs_cooperation(valid_df, long_df)
+        self._plot_exchange_length_mean_variance(valid_df, turn_df)
+        self._plot_done_timing_and_turn_trajectory(turn_df)
         print(f"Graphs saved successfully in the folder '{self.output_dir}/'.")
 
 
