@@ -4,8 +4,11 @@
         "valid_games": 114,
         "parsing_error_rate_pct": 0.0,
         "mean_exchange_turns": 3.16,
+        "std_exchange_turns": 0.75,
         "min_exchange_turns": 2,
-        "max_exchange_turns": 5
+        "max_exchange_turns": 5,
+        "done_termination_rate_pct": 100.0,
+        "mean_done_per_100_words": 0.31
     },
     "chi_square_tests": {
         "role_vs_action": {
@@ -19,6 +22,26 @@
             "p_value": 0.8902,
             "dof": 1,
             "significant_005": false
+        }
+    },
+    "termination_independence_test": {
+        "termination_type_vs_action": {
+            "chi2": 0.0002,
+            "p_value": 0.9893,
+            "dof": 1,
+            "significant_005": false
+        },
+        "done_role_vs_action": {
+            "chi2": 0.0348,
+            "p_value": 0.852,
+            "dof": 1,
+            "significant_005": false
+        },
+        "done_density_mann_whitney": {
+            "compared_actions": "COOPERATE vs DEFECT",
+            "u_statistic": 7624.0,
+            "p_value": 0.0006,
+            "significant_005": true
         }
     },
     "symmetry_binomial_test": {
