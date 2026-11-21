@@ -22,6 +22,8 @@ class Orchestrator:
         """
         agentA = OllamaAgent(self.game, model_name=self.model_name)
         agentB = OllamaAgent(self.game, model_name=self.other_model_name)
+        agentA.handshake(agentB)
+        agentB.handshake(agentA)
         self.agentA_id = agentA.id
         self.agentB_id = agentB.id
         self.map = {agentA.id: agentA, agentB.id: agentB}
@@ -57,6 +59,8 @@ class Orchestrator:
                 agent.listen(message, user="AGENT")
                 message = agent.respond()
                 print(f"[{self.map[agent.id]}]: {message}") if self.verbose else None
+                if agent.is_done():
+                    return
 
     def result(self):
         strategyA, strategyB = self.result_data[0]
