@@ -1,3 +1,4 @@
+from matplotlib.colors import LinearSegmentedColormap
 import os, json, html, re
 import pandas as pd
 import numpy as np
@@ -643,6 +644,21 @@ class Graphs:
         self.dataset = dataset
         self.output_dir = output_dir
         sns.set_theme(style="whitegrid", context="notebook")
+        self.primary_blue = "#31688e"
+        self.primary_green = "#35b779"
+        self.strategy_colors = {
+            "COOPERATE": self.primary_blue,
+            "DEFECT": self.primary_green,
+        }
+
+    def _get_strategy_palette(self, categories) -> dict:
+        """Map strategy labels consistently to the reference blue/green palette."""
+        cats = list(categories)
+        fallback = sns.color_palette("viridis", max(len(cats), 2)).as_hex()
+        return {
+            cat: self.strategy_colors.get(str(cat).upper(), fallback[idx % len(fallback)])
+            for idx, cat in enumerate(cats)
+        }
 
     def _plot_outcome_matrix(self, valid_df: pd.DataFrame):
         """
@@ -657,22 +673,26 @@ class Graphs:
             for j in range(counts.shape[1]):
                 annot_matrix[i, j] = f"{pcts.iloc[i, j]:.1f}%\n(n={counts.iloc[i, j]})"
 
-        plt.figure(figsize=(7, 5.5))
+        blue_green_cmap = LinearSegmentedColormap.from_list(
+            "viridis_bg", ["#f4f9f8", "#74c69d", self.primary_blue]
+        )
+
+        plt.figure(figsize=(6.8, 5.2))
         ax = sns.heatmap(
             pcts,
             annot=annot_matrix,
             fmt="",
-            cmap="Blues",
-            cbar_kws={"label": "Percentage on valid matches (%)"},
+            cmap=blue_green_cmap,
+            cbar_kws={"label": "Valid Matches (%)"},
             vmin=0,
             vmax=100,
             linewidths=1.5,
             linecolor="white",
             annot_kws={"size": 13, "weight": "bold"}
         )
-        ax.set_title("Matrix of Joint Outcomes (Agent A vs Agent B)", fontsize=14, pad=14)
-        ax.set_xlabel("Choice Agent B", fontsize=12)
-        ax.set_ylabel("Choice Agent A", fontsize=12)
+        ax.set_title("Joint Outcomes (Agent A vs Agent B)", fontsize=13.5, pad=12)
+        ax.set_xlabel("Agent B Choice", fontsize=11.5)
+        ax.set_ylabel("Agent A Choice", fontsize=11.5)
         plt.tight_layout()
         plt.savefig(os.path.join(self.output_dir, "outcome_matrix_heatmap.png"), dpi=300)
         plt.close()
@@ -682,32 +702,40 @@ class Graphs:
         Analyze the relationship between normalized diplomatic verbosity (words per turn)
         and the final choice, overlaying empirical quartile rates on the logistic curve.
         """
-        fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.2))
+        fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.0))
+        actions = sorted(long_df["action"].unique())
+        palette = self._get_strategy_palette(actions)
 
         sns.boxplot(
             data=long_df,
             x="action",
             y="words_per_turn",
+            order=actions,
             hue="action",
-            palette="Pastel1",
+            hue_order=actions,
+            dodge=False,
+            palette=palette,
+            boxprops={"alpha": 0.85},
             ax=axes[0],
             width=0.45,
-            legend=False,
         )
+        if axes[0].get_legend():
+            axes[0].get_legend().remove()
+
         sns.stripplot(
             data=long_df,
             x="action",
             y="words_per_turn",
-            color="black",
-            alpha=0.5,
+            order=actions,
+            color="#1f2937",
+            alpha=0.45,
             jitter=0.15,
             ax=axes[0],
         )
-        axes[0].set_title("Diplomatic Verbosity per Turn by Final Choice", fontsize=12)
-        axes[0].set_xlabel("Selected Strategy", fontsize=11)
-        axes[0].set_ylabel("Mean words per turn (words / turns)", fontsize=11)
+        axes[0].set_title("Verbosity per Turn by Strategy", fontsize=12)
+        axes[0].set_xlabel("Strategy", fontsize=11)
+        axes[0].set_ylabel("Words per Turn", fontsize=11)
 
-        actions = sorted(long_df["action"].unique())
         if len(actions) >= 2 and long_df["words_per_turn"].std() > 0:
             target_action = "DEFECT" if "DEFECT" in actions else actions[1]
             temp = long_df.copy()
@@ -719,8 +747,8 @@ class Graphs:
                     y="target_bin",
                     logistic=True,
                     ci=95,
-                    scatter_kws={"alpha": 0.3, "color": "#2b5c8f", "s": 28, "label": "Observed matches (0/1)"},
-                    line_kws={"color": "#d95f02", "lw": 2.2, "label": "Logistic fit (95% CI)"},
+                    scatter_kws={"alpha": 0.35, "color": self.primary_blue, "s": 28, "label": "Observed (0/1)"},
+                    line_kws={"color": self.primary_green, "lw": 2.4, "label": "Logistic fit (95% CI)"},
                     ax=axes[1],
                 )
                 temp["bin"] = pd.qcut(temp["words_per_turn"], q=4, duplicates="drop")
@@ -733,13 +761,13 @@ class Graphs:
                     binned["y_rate"],
                     color="#111827",
                     marker="D",
-                    s=55,
+                    s=52,
                     zorder=5,
-                    label="Quartile empirical rate",
+                    label="Quartile rate",
                 )
-                axes[1].set_title(f"Probability of '{target_action}' vs Words per Turn", fontsize=12)
-                axes[1].set_xlabel("Mean words per turn (words / turns)", fontsize=11)
-                axes[1].set_ylabel(f"Probability P({target_action})", fontsize=11)
+                axes[1].set_title(f"P({target_action}) vs. Words per Turn", fontsize=12)
+                axes[1].set_xlabel("Words per Turn", fontsize=11)
+                axes[1].set_ylabel(f"P({target_action})", fontsize=11)
                 axes[1].set_ylim(-0.05, 1.05)
                 axes[1].legend(loc="upper left", fontsize=9, frameon=True)
             except RuntimeError:
@@ -759,18 +787,19 @@ class Graphs:
         and the respondent (Responder).
         """
         temp = long_df.copy()
-        temp["turn_role"] = np.where(temp["is_initiator"], "Initiator (1° a parlare)", "Responder (2° a parlare)")
+        temp["turn_role"] = np.where(temp["is_initiator"], "Initiator (1st)", "Responder (2nd)")
         ct_pct = (pd.crosstab(temp["turn_role"], temp["action"], normalize="index") * 100).reset_index()
         melted = ct_pct.melt(id_vars="turn_role", var_name="action", value_name="percentage")
+        palette = self._get_strategy_palette(melted["action"].unique())
 
-        plt.figure(figsize=(7.5, 5))
-        ax = sns.barplot(data=melted, x="turn_role", y="percentage", hue="action", palette="viridis")
+        plt.figure(figsize=(7.2, 4.9))
+        ax = sns.barplot(data=melted, x="turn_role", y="percentage", hue="action", palette=palette)
         for container in ax.containers:
             ax.bar_label(container, fmt="%.1f%%", padding=3, fontsize=10)
 
-        ax.set_title("Impact of Speaking Turn on Final Choice", fontsize=14, pad=12)
+        ax.set_title("Strategy Choice by Speaking Order", fontsize=13.5, pad=12)
         ax.set_xlabel("")
-        ax.set_ylabel("Percentage (%)", fontsize=12)
+        ax.set_ylabel("Strategy Share (%)", fontsize=11.5)
         ax.set_ylim(0, 112)
         plt.legend(title="Strategy")
         plt.tight_layout()
@@ -779,86 +808,42 @@ class Graphs:
 
     def _plot_done_proportion_vs_words(self, valid_df: pd.DataFrame, long_df: pd.DataFrame):
         """
-        Visualize [DONE] occurrence in proportion to spoken words:
-        - Left panel: proportion (%) of matches containing [DONE] across total word-count quartiles.
-        - Right panel: distribution of [DONE] density per 100 spoken words across final strategies.
+        Visualize the distribution of [DONE] density per 100 spoken words
+        across final chosen strategies.
         """
-        fig, axes = plt.subplots(1, 2, figsize=(13, 5.2))
-
-        if valid_df["total_words"].nunique() > 1:
-            temp_m = valid_df.copy()
-            temp_m["word_bin"] = pd.qcut(temp_m["total_words"], q=4, duplicates="drop")
-            bin_summary = temp_m.groupby("word_bin", observed=False).agg(
-                total_matches=("has_done", "count"),
-                done_matches=("has_done", "sum"),
-                done_pct=("has_done", lambda s: s.mean() * 100),
-            ).reset_index()
-            bin_summary["bin_label"] = [
-                f"Q{idx + 1}\n({int(iv.left)}–{int(iv.right)}w)"
-                for idx, iv in enumerate(bin_summary["word_bin"])
-            ]
-        else:
-            total_m = len(valid_df)
-            done_m = int(valid_df["has_done"].sum())
-            bin_summary = pd.DataFrame({
-                "bin_label": ["All Matches"],
-                "total_matches": [total_m],
-                "done_matches": [done_m],
-                "done_pct": [(done_m / max(total_m, 1)) * 100],
-            })
-
-        ax0 = sns.barplot(
-            data=bin_summary,
-            x="bin_label",
-            y="done_pct",
-            hue="bin_label",
-            dodge=False,
-            palette="Blues_d",
-            ax=axes[0],
-        )
-        if ax0.get_legend():
-            ax0.get_legend().remove()
-
-        for idx, row in bin_summary.iterrows():
-            ax0.text(
-                idx,
-                row["done_pct"] + 2.0,
-                f"{row['done_pct']:.1f}%\n({int(row['done_matches'])}/{int(row['total_matches'])})",
-                ha="center",
-                va="bottom",
-                fontsize=9.5,
-                fontweight="bold",
-            )
-        axes[0].set_ylim(0, 116)
-        axes[0].set_title("[DONE] Occurrence Rate by Match Word-Count Quartile", fontsize=12)
-        axes[0].set_xlabel("Total Diplomatic Word Count Quartile", fontsize=11)
-        axes[0].set_ylabel("Matches with [DONE] (%)", fontsize=11)
+        fig, ax = plt.subplots(figsize=(7.2, 5.0))
+        actions = sorted(long_df["action"].unique())
+        palette = self._get_strategy_palette(actions)
 
         sns.boxplot(
             data=long_df,
             x="action",
             y="done_per_100_words",
+            order=actions,
             hue="action",
+            hue_order=actions,
             dodge=False,
-            palette="Set2",
+            palette=palette,
+            boxprops={"alpha": 0.85},
             width=0.45,
-            ax=axes[1],
+            ax=ax,
         )
-        if axes[1].get_legend():
-            axes[1].get_legend().remove()
+        if ax.get_legend():
+            ax.get_legend().remove()
 
         sns.stripplot(
             data=long_df,
             x="action",
             y="done_per_100_words",
-            color="black",
-            alpha=0.5,
+            order=actions,
+            color="#1f2937",
+            alpha=0.45,
             jitter=0.15,
-            ax=axes[1],
+            ax=ax,
         )
-        axes[1].set_title("[DONE] Density per 100 Words by Chosen Strategy", fontsize=12)
-        axes[1].set_xlabel("Selected Strategy", fontsize=11)
-        axes[1].set_ylabel("[DONE] Count per 100 Spoken Words", fontsize=11)
+        ax.set_title("[DONE] Density by Strategy", fontsize=12.5)
+        ax.set_xlabel("Strategy", fontsize=11)
+        ax.set_ylabel("[DONE] per 100 Words", fontsize=11)
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.output_dir, "done_proportion_vs_words.png"), dpi=300)
@@ -870,7 +855,8 @@ class Graphs:
         - Left panel: agent strategy rates across match termination categories.
         - Right panel: agent strategy rates depending on whether the agent or partner emitted [DONE].
         """
-        fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.2))
+        fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.0))
+        palette = self._get_strategy_palette(long_df["action"].unique())
 
         term_order = [
             t for t in ["Mutual [DONE]", "Unilateral [DONE]", "Max Turns (No [DONE])"]
@@ -881,12 +867,12 @@ class Graphs:
         ct_term.index = [f"{t}\n(n={term_counts.get(t, 0)} matches)" for t in ct_term.index]
         melted_term = ct_term.reset_index().melt(id_vars="index", var_name="action", value_name="percentage")
 
-        ax0 = sns.barplot(data=melted_term, x="index", y="percentage", hue="action", palette="viridis", ax=axes[0])
+        ax0 = sns.barplot(data=melted_term, x="index", y="percentage", hue="action", palette=palette, ax=axes[0])
         for container in ax0.containers:
             ax0.bar_label(container, fmt="%.1f%%", padding=3, fontsize=9.5)
-        axes[0].set_title("Strategy Choice by Match Termination Type", fontsize=12)
+        axes[0].set_title("Strategy by Termination Type", fontsize=12)
         axes[0].set_xlabel("")
-        axes[0].set_ylabel("Agent Strategy Share (%)", fontsize=11)
+        axes[0].set_ylabel("Strategy Share (%)", fontsize=11)
         axes[0].set_ylim(0, 114)
         axes[0].legend(title="Strategy")
 
@@ -899,12 +885,12 @@ class Graphs:
         ct_role.index = [f"{r}\n(n={role_counts.get(r, 0)} agents)" for r in ct_role.index]
         melted_role = ct_role.reset_index().melt(id_vars="index", var_name="action", value_name="percentage")
 
-        ax1 = sns.barplot(data=melted_role, x="index", y="percentage", hue="action", palette="viridis", ax=axes[1])
+        ax1 = sns.barplot(data=melted_role, x="index", y="percentage", hue="action", palette=palette, ax=axes[1])
         for container in ax1.containers:
             ax1.bar_label(container, fmt="%.1f%%", padding=3, fontsize=9.5)
-        axes[1].set_title("Strategy Choice by Agent [DONE] Role", fontsize=12)
+        axes[1].set_title("Strategy by [DONE] Sender", fontsize=12)
         axes[1].set_xlabel("")
-        axes[1].set_ylabel("Agent Strategy Share (%)", fontsize=11)
+        axes[1].set_ylabel("Strategy Share (%)", fontsize=11)
         axes[1].set_ylim(0, 114)
         axes[1].legend(title="Strategy")
 
@@ -918,9 +904,16 @@ class Graphs:
         - Left panel: number of exchanges (turns) per match grouped by joint outcome.
         - Right panel: message word length across exchange turns (Turn 1 to Turn N).
         """
-        fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.4))
+        fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.2))
 
         outcome_order = sorted(valid_df["joint_outcome"].unique())
+        short_labels = [
+            "/".join(part.strip()[0].upper() for part in out.split("/") if part.strip())
+            if "/" in out else out
+            for out in outcome_order
+        ]
+        outcome_palette = sns.color_palette("viridis", max(len(outcome_order), 2)).as_hex()[:len(outcome_order)]
+
         sns.boxplot(
             data=valid_df,
             x="joint_outcome",
@@ -929,7 +922,8 @@ class Graphs:
             hue="joint_outcome",
             hue_order=outcome_order,
             dodge=False,
-            palette="Pastel2",
+            palette=outcome_palette,
+            boxprops={"alpha": 0.78},
             width=0.45,
             ax=axes[0],
         )
@@ -941,24 +935,29 @@ class Graphs:
             x="joint_outcome",
             y="turns",
             order=outcome_order,
-            color="#374151",
-            alpha=0.55,
+            color="#1f2937",
+            alpha=0.5,
             jitter=0.14,
             ax=axes[0],
         )
 
         stats_out = valid_df.groupby("joint_outcome")["turns"].agg(["mean", "std", "var"]).reindex(outcome_order).fillna(0.0)
         x_pos = np.arange(len(outcome_order))
+        axes[0].set_xticks(x_pos)
+        axes[0].set_xticklabels(short_labels)
+
         axes[0].errorbar(
             x_pos,
             stats_out["mean"],
             yerr=stats_out["std"],
             fmt="D",
-            color="#b91c1c",
-            ecolor="#b91c1c",
+            color="#111827",
+            ecolor="#111827",
+            markeredgecolor="white",
+            markeredgewidth=1.0,
             elinewidth=1.8,
             capsize=5,
-            markersize=7,
+            markersize=7.5,
             zorder=6,
             label="Mean ± 1 SD",
         )
@@ -975,13 +974,14 @@ class Graphs:
                 fontweight="bold",
             )
         axes[0].set_ylim(0.5, y_max_0 + 1.15)
-        axes[0].set_title("Exchange Count (Turns): Boxplot, Mean & Variance by Outcome", fontsize=11.5)
-        axes[0].set_xlabel("Joint Match Outcome", fontsize=11)
-        axes[0].set_ylabel("Number of Exchanges (Turns)", fontsize=11)
+        axes[0].set_title("Exchanges (Turns) by Outcome", fontsize=12)
+        axes[0].set_xlabel("Outcome (C = Cooperate, D = Defect)", fontsize=11)
+        axes[0].set_ylabel("Exchanges (Turns)", fontsize=11)
         axes[0].legend(loc="lower right", fontsize=9)
 
         if not turn_df.empty:
             turn_order = sorted(turn_df["turn"].unique())
+            turn_palette = sns.color_palette("viridis", max(len(turn_order), 2)).as_hex()[:len(turn_order)]
             sns.boxplot(
                 data=turn_df,
                 x="turn",
@@ -990,7 +990,8 @@ class Graphs:
                 hue="turn",
                 hue_order=turn_order,
                 dodge=False,
-                palette="Blues",
+                palette=turn_palette,
+                boxprops={"alpha": 0.78},
                 width=0.48,
                 ax=axes[1],
             )
@@ -1004,11 +1005,13 @@ class Graphs:
                 stats_turn["mean"],
                 yerr=stats_turn["std"],
                 fmt="-D",
-                color="#d95f02",
-                ecolor="#d95f02",
+                color="#111827",
+                ecolor="#111827",
+                markeredgecolor="white",
+                markeredgewidth=1.0,
                 elinewidth=1.6,
                 capsize=4,
-                markersize=6,
+                markersize=6.5,
                 zorder=6,
                 label="Mean ± 1 SD",
             )
@@ -1024,8 +1027,8 @@ class Graphs:
                     color="#111827",
                 )
             axes[1].set_ylim(0, y_max_1 + max(4.0, y_max_1 * 0.20))
-            axes[1].set_title("Message Word Length Across Turns: Boxplot, Mean & Variance", fontsize=11.5)
-            axes[1].set_xlabel("Exchange Turn Index", fontsize=11)
+            axes[1].set_title("Message Length by Turn", fontsize=12)
+            axes[1].set_xlabel("Turn", fontsize=11)
             axes[1].set_ylabel("Words per Message", fontsize=11)
             axes[1].legend(loc="upper right", fontsize=9)
         else:
@@ -1045,37 +1048,40 @@ class Graphs:
         if turn_df.empty:
             return
 
-        fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.2))
+        fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.0))
         turn_order = sorted(turn_df["turn"].unique())
         done_turns = turn_df[turn_df["has_done"]]
+        palette = self._get_strategy_palette(sorted(turn_df["action"].unique()))
 
         if not done_turns.empty:
             ct_timing = pd.crosstab(done_turns["turn"], done_turns["action"]).reindex(turn_order, fill_value=0)
             melted_timing = ct_timing.reset_index().melt(id_vars="turn", var_name="action", value_name="count")
-            ax0 = sns.barplot(data=melted_timing, x="turn", y="count", hue="action", palette="Set1", ax=axes[0])
+            ax0 = sns.barplot(data=melted_timing, x="turn", y="count", hue="action", palette=palette, ax=axes[0])
             for container in ax0.containers:
                 ax0.bar_label(container, padding=2, fontsize=9)
-            axes[0].set_title("[DONE] Emission Timing Across Exchange Turns", fontsize=12)
-            axes[0].set_xlabel("Exchange Turn Index", fontsize=11)
-            axes[0].set_ylabel("Count of [DONE] Messages", fontsize=11)
-            axes[0].legend(title="Final Strategy")
+            axes[0].set_title("[DONE] Timing by Turn", fontsize=12)
+            axes[0].set_xlabel("Turn", fontsize=11)
+            axes[0].set_ylabel("[DONE] Messages", fontsize=11)
+            axes[0].legend(title="Strategy")
         else:
             axes[0].text(0.5, 0.5, "No [DONE] tokens emitted in valid matches", ha="center", va="center")
             axes[0].set_axis_off()
 
         for act, grp in turn_df.groupby("action"):
+            color = palette.get(act, self.primary_blue)
             agg_t = grp.groupby("turn")["words"].agg(["mean", "std"]).reindex(turn_order).fillna(0.0)
-            axes[1].plot(turn_order, agg_t["mean"], marker="o", linewidth=2.2, label=f"{act} (Mean)")
+            axes[1].plot(turn_order, agg_t["mean"], marker="o", linewidth=2.2, color=color, label=f"{act} (Mean)")
             axes[1].fill_between(
                 turn_order,
                 np.maximum(0, agg_t["mean"] - agg_t["std"]),
                 agg_t["mean"] + agg_t["std"],
+                color=color,
                 alpha=0.18,
                 label=f"{act} (±1 SD)",
             )
         axes[1].set_xticks(turn_order)
-        axes[1].set_title("Turn-by-Turn Message Length Trajectory (Mean ± 1 SD)", fontsize=12)
-        axes[1].set_xlabel("Exchange Turn Index", fontsize=11)
+        axes[1].set_title("Message Length Trajectory (Mean ± 1 SD)", fontsize=12)
+        axes[1].set_xlabel("Turn", fontsize=11)
         axes[1].set_ylabel("Words per Message", fontsize=11)
         axes[1].legend(fontsize=8.5, frameon=True)
 
