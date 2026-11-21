@@ -36,6 +36,10 @@ class Orchestrator:
         other_agent = self.agents[1 - start_agent_idx]
         # start the talking phase between the two agents
         self._talking_phase(first_agent, other_agent)
+
+        # Snapshot the pure negotiation transcript before [JUDGE] prompts are appended
+        negotiation_transcript = list(self.agents[0].messages)
+
         # after the talking phase, ask each agent for their final strategy
         strategyA, explA = self.agents[0].get_strategy()
         strategyB, explB = self.agents[1].get_strategy()
@@ -43,7 +47,13 @@ class Orchestrator:
             payoffA, payoffB = self.game.resolve_turn(strategyA, strategyB)
         except ValueError:
             payoffA, payoffB = 0, 0
-        self.result_data = [(strategyA, strategyB), (payoffA, payoffB), (explA, explB), first_agent.id]
+        self.result_data = [
+            (strategyA, strategyB),
+            (payoffA, payoffB),
+            (explA, explB),
+            first_agent.id,
+            negotiation_transcript,
+        ]
         self._add_to_response_history()
 
     def _talking_phase(self, first_agent: OllamaAgent, other_agent: OllamaAgent):
@@ -53,12 +63,15 @@ class Orchestrator:
         agents = [other_agent, first_agent]
         first_agent.listen(message, user)
         message = first_agent.respond()
+        if self.verbose:
+            print(f"[{first_agent.id}]: {message}")
 
         for _ in range(self.max_turns):
             for agent in agents:
                 agent.listen(message, user="AGENT")
                 message = agent.respond()
-                print(f"[{self.map[agent.id]}]: {message}") if self.verbose else None
+                if self.verbose:
+                    print(f"[{agent.id}]: {message}")
                 if agent.is_done():
                     return
 
@@ -79,6 +92,7 @@ class Orchestrator:
         payoffA, payoffB = self.result_data[1]
         explA, explB = self.result_data[2]
         first_agent_id = self.result_data[3]
+        negotiation_transcript = self.result_data[4]
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         record = {
             "time": timestamp,
@@ -98,7 +112,7 @@ class Orchestrator:
                 "payoffB": payoffB
             },
             "first_speaker_id": first_agent_id,
-            "full_conversation": self.agents[0].messages
+            "full_conversation": negotiation_transcript
         }
         self.response_history.append(record)
         self.response_buffer_cnt = len(self.response_history)

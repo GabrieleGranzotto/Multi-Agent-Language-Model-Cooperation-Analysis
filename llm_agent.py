@@ -50,10 +50,14 @@ class OllamaAgent:
             else:
                 response = ollama.chat(model=self.model_name, messages=self.messages)
                 cnt = 0
+                agent_turns_so_far = sum(1 for m in self.messages if m["role"] == "assistant")
                 while not self._sanity_check(response["message"]["content"]):
                     cnt += 1
                     if cnt > 10:
-                        content = "I have stated my position clearly and I am ready to conclude our discussion. [DONE]"
+                        if agent_turns_so_far == 0:
+                            content = "Let's discuss our approach for this round so we can reach a mutually beneficial outcome."
+                        else:
+                            content = "I have stated my position clearly and I am ready to conclude our discussion. [DONE]"
                         break
                     response = ollama.chat(model=self.model_name, messages=self.messages)
         except Exception as e:
@@ -235,14 +239,22 @@ The value for "answer" MUST be either "COOPERATE" or "DEFECT".
 
     def is_done(self) -> bool:
         """
-        Check if the last messages of the two agents contain [DONE].
+        Check if both the current agent's last message and the opponent's last message contain [DONE].
 
         Returns:
-            bool: True if the agent has sent a message containing [DONE], False otherwise.
+            bool: True if both agents included [DONE] in their respective last turns, False otherwise.
         """
-        first_check = any(re.search(r"\[DONE\]", m["content"], flags=re.IGNORECASE) for m in self.messages if m["role"] == "assistant")
-        second_check = any(re.search(r"\[DONE\]", m["content"], flags=re.IGNORECASE) for m in self.messages if m["role"] == "user")
-        return (first_check and second_check)
+        own_msgs = [m["content"] for m in self.messages if m["role"] == "assistant"]
+        opp_msgs = [
+            m["content"] for m in self.messages
+            if m["role"] == "user" and m["content"].startswith(f"[{self.opponent_id}]:")
+        ]
+        if not own_msgs or not opp_msgs:
+            return False
+
+        own_done = bool(re.search(r"\[DONE\]", own_msgs[-1], flags=re.IGNORECASE))
+        opp_done = bool(re.search(r"\[DONE\]", opp_msgs[-1], flags=re.IGNORECASE))
+        return own_done and opp_done
 
     def _error_handling(self, critical_message: str, user: str) -> tuple[str, str]:
         """

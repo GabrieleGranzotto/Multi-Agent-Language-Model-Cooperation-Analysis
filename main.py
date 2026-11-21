@@ -18,11 +18,11 @@ def main():
                                 verbose=args.verbose)
     print(f"Running simulation with {args.num_rep} repetitions, \nmax turns: {args.max_turns}, \nmodel: {args.model_name}, \nother model: {args.other_model_name}, \nrandom start: {args.randomizer}, \nverbose: {args.verbose}")
     for i in range(args.num_rep):
-        print(f"\n--- Simulation Run {i + 1}... ---")
+        print(f"\n----- Simulation Run {i + 1}... ----\n")
         try:
             orchestrator.run()
             orchestrator.result()
-            print("-----------------------------------")
+            print("-----------------------------------\n")
         except Exception as e:
             print(f"[ERROR] occurred during Run {i + 1}: {e}")
         finally:
