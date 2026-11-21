@@ -1,0 +1,39 @@
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1.65cm, top=1.7cm, bottom=1.7cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{enumitem}
+
+% Calibrated spacing for a concise ~2-page exploratory report (excluding references)
+\titlespacing*{\section}{0pt}{8pt}{4pt}
+\titlespacing*{\subsection}{0pt}{5pt}{2.5pt}
+\setlength{\parskip}{3pt}
+\setlength{\parindent}{1em}
+\setlength{\columnsep}{0.6cm}
+
+\title{\vspace{-1.0cm}\large\textbf{Can Language Create Cooperation? Natural-Language Negotiation in Strategic Multi-Agent LLM Interactions}}
+\author{\normalsize Gabriele Granzotto \\ \small University of Trieste -- Multi-Agent Systems \\ \small Code \& Reproducibility: \url{https://github.com/GabrieleGranzotto/Multi-Agent-Language-Model-Cooperation-Analysis}}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-0.6cm}
+
+\input{sections/01_introduction}
+\input{sections/02_methodology}
+\input{sections/03_results}
+\input{sections/04_discussion_future}
+
+\small
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
