@@ -54,7 +54,7 @@ class OllamaAgent:
                 while not self._sanity_check(response["message"]["content"]):
                     cnt += 1
                     if cnt > 10:
-                        if agent_turns_so_far == 0:
+                        if agent_turns_so_far < 2:
                             content = "Let's discuss our approach for this round so we can reach a mutually beneficial outcome."
                         else:
                             content = "I have stated my position clearly and I am ready to conclude our discussion. [DONE]"

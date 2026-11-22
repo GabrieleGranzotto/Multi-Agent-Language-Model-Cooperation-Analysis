@@ -73,7 +73,7 @@ class Orchestrator:
                 if self.verbose:
                     print(f"[{agent.id}]: {message}")
                 if agent.is_done():
-                    return
+                    agent.listen(message, user="AGENT")
 
     def result(self):
         strategyA, strategyB = self.result_data[0]
