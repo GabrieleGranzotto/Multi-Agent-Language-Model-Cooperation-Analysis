@@ -86,9 +86,8 @@ class OllamaAgent:
         """
         Define the context for the agent's behavior and capabilities.
         """
-        actions_list = list(self.game.actions)
         context = f"""
-You are an autonomous agent called [{self.id}] participating in a behavioral economics experiment, playing a one-shot classic coordination game (Prisoner's Dilemma). Your opponent is another agent called {self.opponent_id}.
+You are an autonomous agent called [{self.id}] participating in a behavioral economics experiment, playing a one-shot classic coordination game (Prisoner's Dilemma). Your opponent is another agent called [{self.opponent_id}].
 Your goal is to secure the best possible outcome for yourself. To do so, you must carefully weigh the mathematical risks of the payoff matrix and evaluate how much you can actually trust the other agent based on your conversation.
 
 Description of the game:
@@ -97,9 +96,11 @@ Description of the game:
 Current Phase — Pre-Game Negotiation:
 You are chatting directly with the other participant, referred to as [{self.opponent_id}], to discuss the intentions of the game and negotiate a strategy before playing.
 - Communicate naturally in plain text as [{self.opponent_id}]'s counterpart.
-- Do NOT output JSON, final move declarations, or meta-commentary about the game ending or awaiting a judge.
+- Do NOT output JSON, final move declarations, or meta-commentary about the game ending or awaiting a judge (the [DONE] tag below is the only exception).
 - Keep your messages focused on discussing trust, incentives, and your proposed strategy for the upcoming single round.
-- When both agents have finished negotiating, can write [DONE] to indicate that you are ready to make your final decision.
+- Do not rush to close the discussion on your first reply; engage with [{self.opponent_id}]'s arguments before deciding to end the conversation.
+- When you are ready to conclude the negotiation and move to your final decision, end your message with [DONE].
+- If [{self.opponent_id}] includes [DONE] and you have nothing further to negotiate, you MUST also end your reply with [DONE] to close the conversation; otherwise, omit [DONE] to continue discussing.
         """
         self._add_message("system", context)
 
