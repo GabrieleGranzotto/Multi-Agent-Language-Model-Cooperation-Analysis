@@ -1,5 +1,0 @@
-role,action,count,mean,std,median,total
-Agent A,COOPERATE,75,2.44,1.177,3.0,183
-Agent A,DEFECT,39,2.026,1.769,1.0,79
-Agent B,COOPERATE,71,2.577,1.051,3.0,183
-Agent B,DEFECT,43,2.302,1.897,1.0,99
