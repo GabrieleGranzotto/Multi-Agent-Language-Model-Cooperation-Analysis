@@ -1,7 +1,7 @@
-import re, json, ollama, random
+import os, time, re, json, ollama, random
 
 class OllamaAgent:
-    def __init__(self, game, model_name: str = "gemma4"):
+    def __init__(self, game, model_name: str = "gemma4", debug: bool = False):
         self.model_name = model_name
         self.game = game
         self.messages = []
@@ -9,6 +9,7 @@ class OllamaAgent:
         self.sanity_retries = 0
         self.hardcoded_fallbacks = 0
         self.sanity_fail_reasons: dict[str, int] = {}
+        self.debug = debug
 
     def handshake(self, opponent_agent: "OllamaAgent") -> None:
         """
@@ -147,6 +148,19 @@ The value for "answer" MUST be either "{actions_list[0]}" or "{actions_list[1]}"
 
     def _record_sanity_fail(self, reason: str) -> bool:
         self.sanity_fail_reasons[reason] = self.sanity_fail_reasons.get(reason, 0) + 1
+        if self.debug:
+            turn = sum(1 for m in self.messages if m["role"] == "assistant") + 1
+            raw_text = getattr(self, "_last_raw_text", "")
+            print(f"[DEBUG][Agent {self.id}][Turn {turn}][{reason}]: {raw_text!r}")
+            os.makedirs("data", exist_ok=True)
+            with open("data/sanity_debug.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "agent_id": self.id,
+                    "turn": turn,
+                    "reason": reason,
+                    "raw_text": raw_text,
+                }, ensure_ascii=False) + "\n")
         return False
 
     def _sanity_check(self, raw_text: str) -> bool:
@@ -154,6 +168,7 @@ The value for "answer" MUST be either "{actions_list[0]}" or "{actions_list[1]}"
         Validate a negotiation message before adding it to the history.
         Returns True if valid, False if the model must regenerate.
         """
+        self._last_raw_text = raw_text  # Store for debugging if needed
         if not raw_text or not isinstance(raw_text, str):
             return self._record_sanity_fail("empty_or_invalid_type")
 

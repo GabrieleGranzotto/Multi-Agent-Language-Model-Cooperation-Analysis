@@ -3,14 +3,21 @@ from game_env import GameMatrix
 from llm_agent import OllamaAgent
 
 class Orchestrator:
-    def __init__(self, max_turns: int = 5, model_name: str = "gemma4", other_model_name: str = None, randomize_start: bool = False, verbose: bool = False):
+    def __init__(
+        self,
+        max_turns: int = 5,
+        model_name: str = "gemma4",
+        other_model_name: str = None,
+        randomize_start: bool = False,
+        verbose: bool = False,
+        debug: bool = False,
+    ):
         self.max_turns = max_turns
-
         self.model_name = model_name
         self.other_model_name = other_model_name if other_model_name is not None else model_name
-
         self.rand_start = randomize_start
         self.verbose = verbose
+        self.debug = debug
         self.response_history = []
         self.game = GameMatrix.load_from_json("data/games.json", "prisoners_dilemma")
         self.reset()
@@ -20,8 +27,8 @@ class Orchestrator:
         Reset the system to take in memory just the single conversation.
         The inference should stay light and fast.
         """
-        agentA = OllamaAgent(self.game, model_name=self.model_name)
-        agentB = OllamaAgent(self.game, model_name=self.other_model_name)
+        agentA = OllamaAgent(self.game, model_name=self.model_name, debug=self.debug)
+        agentB = OllamaAgent(self.game, model_name=self.other_model_name, debug=self.debug)
         agentA.handshake(agentB)
         agentB.handshake(agentA)
         self.agentA_id = agentA.id

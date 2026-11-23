@@ -10,13 +10,17 @@ def main():
     parser.add_argument("-o", "--other_model_name", type=str, default=None, help="Name of the LLM model to use for the other agent.")
     parser.add_argument("-r", "--randomizer", action="store_true", help="Randomize the starting agent.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")
+    parser.add_argument("-d", "--debug", action="store_true", help="Log sanity-check rejections to console and data/sanity_debug.jsonl.")
     args = parser.parse_args()
-    orchestrator = Orchestrator(max_turns=args.max_turns, 
-                                model_name=args.model_name, 
-                                other_model_name=args.other_model_name, 
-                                randomize_start=args.randomizer, 
-                                verbose=args.verbose)
-    print(f"Running simulation with {args.num_rep} repetitions, \nmax turns: {args.max_turns}, \nmodel: {args.model_name}, \nother model: {args.other_model_name}, \nrandom start: {args.randomizer}, \nverbose: {args.verbose}")
+    orchestrator = Orchestrator(
+        max_turns=args.max_turns,
+        model_name=args.model_name,
+        other_model_name=args.other_model_name,
+        randomize_start=args.randomizer,
+        verbose=args.verbose,
+        debug=args.debug,
+    )
+    print(f"Running simulation with {args.num_rep} repetitions, \nmax turns: {args.max_turns}, \nmodel: {args.model_name}, \nother model: {args.other_model_name}, \nrandom start: {args.randomizer}, \nverbose: {args.verbose}, \ndebug: {args.debug}")
     for i in range(args.num_rep):
         print(f"\n------- Simulation Run {i + 1}... -------\n")
         try:
@@ -27,10 +31,9 @@ def main():
         except Exception as e:
             print(f"[ERROR] occurred during Run {i + 1}: {e}")
         finally:
-            orchestrator.reset()  # Reset the orchestrator for a new conversation if needed
-        orchestrator.reset()  # Reset the orchestrator for a new conversation if needed
-    orchestrator.save_response_history()  # Save the response history to a JSON file
-    
+            orchestrator.reset()
+    orchestrator.save_response_history()
+
     # Generate the report and explanations summary after all repetitions are completed
     generate_all_pipeline()
 
