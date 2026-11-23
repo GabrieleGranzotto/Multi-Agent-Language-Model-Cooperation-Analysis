@@ -6,6 +6,9 @@ class OllamaAgent:
         self.game = game
         self.messages = []
         self.id = random.randint(1000, 9999)  # Unique identifier for the agent
+        self.sanity_retries = 0
+        self.hardcoded_fallbacks = 0
+        self.sanity_fail_reasons: dict[str, int] = {}
 
     def handshake(self, opponent_agent: "OllamaAgent") -> str:
         """
@@ -54,11 +57,13 @@ class OllamaAgent:
                 while not self._sanity_check(response["message"]["content"]):
                     cnt += 1
                     if cnt > 10:
+                        self.hardcoded_fallbacks += 1
                         if agent_turns_so_far < 2:
                             content = "Let's discuss our approach for this round so we can reach a mutually beneficial outcome."
                         else:
                             content = "I have stated my position clearly and I am ready to conclude our discussion. [DONE]"
                         break
+                    self.sanity_retries += 1
                     response = ollama.chat(model=self.model_name, messages=self.messages)
         except Exception as e:
             raise RuntimeError(f"Failed to get response from Ollama API: {e}")
@@ -159,57 +164,60 @@ The value for "answer" MUST be either "COOPERATE" or "DEFECT".
         text = re.sub(rf"^\s*\[?{self.id}\]?\s*:\s*", "", text)
         return text.strip()
 
+    def _record_sanity_fail(self, reason: str) -> bool:
+        self.sanity_fail_reasons[reason] = self.sanity_fail_reasons.get(reason, 0) + 1
+        return False
+
     def _sanity_check(self, raw_text: str) -> bool:
         """
         Validate a negotiation message before adding it to the history.
         Returns True if valid, False if the model must regenerate.
         """
         if not raw_text or not isinstance(raw_text, str):
-            return False
+            return self._record_sanity_fail("empty_or_invalid_type")
 
         # 1. Leak of special tokens / internal model channels (e.g., <channel|>)
         if any(tok in raw_text for tok in ("<channel|>", "<|", "|>")):
-            return False
+            return self._record_sanity_fail("special_tokens")
 
         cleaned = self._clean_candidate(raw_text)
 
         # 2. Check for [DONE] tag: not allowed in the first opening turn
-        has_done = bool(re.search(r"\[DONE\]", cleaned, flags=re.IGNORECASE))
+        has_done = bool(re.search(r"[DONE]", cleaned, flags=re.IGNORECASE))
         agent_turns_so_far = sum(1 for m in self.messages if m["role"] == "assistant")
         if has_done and agent_turns_so_far == 0:
-            return False
+            return self._record_sanity_fail("early_done")
 
         # Remove [DONE] to check the actual discursive content
-        body = re.sub(r"\[DONE\]", "", cleaned, flags=re.IGNORECASE).strip()
+        body = re.sub(r"[DONE]", "", cleaned, flags=re.IGNORECASE).strip()
 
         # 4. Empty or non-informative message (e.g., only punctuation, numbers, or whitespace)
         if not body or not re.search(r"[a-zA-Z]{2,}", body):
-            return False
+            return self._record_sanity_fail("non_informative")
 
         # 4. Degenerate or excessively long response
         if len(body) > 2500:
-            return False
+            return self._record_sanity_fail("too_long")
 
         # 5. Spoofing of system roles, referee, or opponent identity
         spoof_pattern = (
             rf"(?i)(\[(?:SYSTEM|JUDGE|SYSTEM_JUDGE|{re.escape(str(self.opponent_id))})\]"
             rf"|^(?:SYSTEM|JUDGE|REFEREE|PLAYER\s*[AB])\s*:)"
         )
-        
         if re.search(spoof_pattern, body):
-            return False
+            return self._record_sanity_fail("role_spoof")
 
         # 6. Direct declaration of the final move (e.g., "Defect", "Cooperate.", "Cooperation")
         actions_regex = "|".join(re.escape(a) for a in self.game.actions) + "|COOPERATION|DEFECTION"
         if re.fullmatch(rf"(?i)({actions_regex})[\s\.\!\?]*", body):
-            return False
+            return self._record_sanity_fail("direct_action")
 
         # 7. Reserved syntax for the verdict phase (JSON, markdown blocks, [Action: ...] tags)
         if re.search(
             r"(?i)(\[\s*Action\s*:|^\s*(Action|Move|Decision)\s*:|```|\{\s*['\"](answer|explanation)['\"])",
             body,
         ):
-            return False
+            return self._record_sanity_fail("reserved_syntax")
 
         # 8. Fake internal thoughts or meta-commentary about the game ending, waiting for a judge, or score reporting
         meta_prefix = (
@@ -217,9 +225,9 @@ The value for "answer" MUST be either "COOPERATE" or "DEFECT".
             r"No further|Silent|Score|Scores|End of|I remain|The game)"
         )
         if re.match(meta_prefix, body, flags=re.IGNORECASE):
-            return False
+            return self._record_sanity_fail("meta_commentary")
         if re.fullmatch(r"\*?\(.*\)\*?", body, flags=re.DOTALL):
-            return False
+            return self._record_sanity_fail("meta_parenthetical")
 
         # 9. Prompt leakage: the model should not output phrases that reveal its internal role or the negotiation phase
         leak_snippets = (
@@ -228,14 +236,14 @@ The value for "answer" MUST be either "COOPERATE" or "DEFECT".
             "autonomous agent participating in a behavioral economics",
         )
         if any(s in body.lower() for s in leak_snippets):
-            return False
+            return self._record_sanity_fail("prompt_leakage")
 
         prev_assistant_msgs = [m["content"] for m in self.messages if m["role"] == "assistant"]
         if prev_assistant_msgs:
             last_own = re.sub(rf"^\[{self.id}\]:\s*", "", prev_assistant_msgs[-1])
             last_own = re.sub(r"\[DONE\]", "", last_own, flags=re.IGNORECASE)
             if re.sub(r"\W+", "", body.lower()) == re.sub(r"\W+", "", last_own.lower()):
-                return False
+                return self._record_sanity_fail("duplicate_message")
         return True
 
     def is_done(self) -> bool:

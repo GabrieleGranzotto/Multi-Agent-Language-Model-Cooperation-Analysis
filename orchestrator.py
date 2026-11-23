@@ -96,18 +96,25 @@ class Orchestrator:
         first_agent_id = self.result_data[3]
         negotiation_transcript = self.result_data[4]
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        agentA, agentB = self.agents[0], self.agents[1]
         record = {
             "time": timestamp,
             "game": self.game.name,
             "agentA": {
                 "id": self.agentA_id,
                 "answer": strategyA,
-                "explanation": explA
+                "explanation": explA,
+                "sanity_retries": agentA.sanity_retries,          
+                "hardcoded_fallbacks": agentA.hardcoded_fallbacks,
+                "sanity_fail_reasons": agentA.sanity_fail_reasons,
             },
             "agentB": {
                 "id": self.agentB_id,
                 "answer": strategyB,
-                "explanation": explB
+                "explanation": explB,
+                "sanity_retries": agentB.sanity_retries,          
+                "hardcoded_fallbacks": agentB.hardcoded_fallbacks,
+                "sanity_fail_reasons": agentB.sanity_fail_reasons,
             },
             "results": {
                 "payoffA": payoffA,
