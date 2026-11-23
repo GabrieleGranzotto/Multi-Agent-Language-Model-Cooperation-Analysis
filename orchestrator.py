@@ -67,13 +67,15 @@ class Orchestrator:
             print(f"[{first_agent.id}]: {message}")
 
         for _ in range(self.max_turns):
-            for agent in agents:
+            for i, agent in enumerate(agents):
                 agent.listen(message, user="AGENT")
                 message = agent.respond()
                 if self.verbose:
                     print(f"[{agent.id}]: {message}")
                 if agent.is_done():
-                    agent.listen(message, user="AGENT")
+                    listener = agents[1 - i]
+                    listener.listen(message, user="AGENT")
+                    return
 
     def result(self):
         strategyA, strategyB = self.result_data[0]
