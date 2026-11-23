@@ -1,5 +1,5 @@
 from matplotlib.colors import LinearSegmentedColormap
-import os, json, html, re
+import os, json, html, re, ollama
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -188,6 +188,13 @@ class DataSet:
             else:
                 termination_type = "Max Turns (No [DONE])"
 
+            retries_a = int(rec.get("agentA", {}).get("sanity_retries", 0))
+            retries_b = int(rec.get("agentB", {}).get("sanity_retries", 0))
+            fallbacks_a = int(rec.get("agentA", {}).get("hardcoded_fallbacks", 0))
+            fallbacks_b = int(rec.get("agentB", {}).get("hardcoded_fallbacks", 0))
+            reasons_a = rec.get("agentA", {}).get("sanity_fail_reasons", {}) or {}
+            reasons_b = rec.get("agentB", {}).get("sanity_fail_reasons", {}) or {}
+            
             rows.append({
                 "match_id": match_id,
                 "time": rec.get("time"),
@@ -222,7 +229,16 @@ class DataSet:
                 "done_per_100_words": round((total_done / total_words) * 100, 3) if total_words > 0 else 0.0,
                 "done_per_100_words_A": round((done_a / words_a) * 100, 3) if words_a > 0 else 0.0,
                 "done_per_100_words_B": round((done_b / words_b) * 100, 3) if words_b > 0 else 0.0,
-                "has_error": has_error
+                "has_error": has_error,
+                "sanity_retries_A": retries_a,
+                "sanity_retries_B": retries_b,
+                "total_sanity_retries": retries_a + retries_b,
+                "hardcoded_fallbacks_A": fallbacks_a,
+                "hardcoded_fallbacks_B": fallbacks_b,
+                "total_hardcoded_fallbacks": fallbacks_a + fallbacks_b,
+                "has_hardcoded_fallback": (fallbacks_a + fallbacks_b) > 0,
+                "sanity_fail_reasons_A": reasons_a,
+                "sanity_fail_reasons_B": reasons_b,
             })
 
         return pd.DataFrame(rows)
@@ -324,6 +340,14 @@ class DataSet:
             "done_role": done_role_a,
             "done_per_100_words": valid_df["done_per_100_words_A"],
             "first_done_turn": valid_df["first_done_turn"],
+            "sanity_retries": valid_df["sanity_retries_A"],
+            "hardcoded_fallbacks": valid_df["hardcoded_fallbacks_A"],
+            "has_hardcoded_fallback": valid_df["hardcoded_fallbacks_A"] > 0,
+            "sanity_tier": np.where(
+                valid_df["hardcoded_fallbacks_A"] > 0,
+                "Hardcoded Fallback",
+                np.where(valid_df["sanity_retries_A"] > 0, "Corrected (1-10 Retries)", "Clean (0 Retries)"),
+            ),
         })
         df_b = pd.DataFrame({
             "match_id": valid_df["match_id"],
@@ -342,6 +366,14 @@ class DataSet:
             "done_role": done_role_b,
             "done_per_100_words": valid_df["done_per_100_words_B"],
             "first_done_turn": valid_df["first_done_turn"],
+            "sanity_retries": valid_df["sanity_retries_B"],
+            "hardcoded_fallbacks": valid_df["hardcoded_fallbacks_B"],
+            "has_hardcoded_fallback": valid_df["hardcoded_fallbacks_B"] > 0,
+            "sanity_tier": np.where(
+                valid_df["hardcoded_fallbacks_B"] > 0,
+                "Hardcoded Fallback",
+                np.where(valid_df["sanity_retries_B"] > 0, "Corrected (1-10 Retries)", "Clean (0 Retries)"),
+            ),
         })
         return pd.concat([df_a, df_b], ignore_index=True)
 
@@ -409,6 +441,60 @@ class StatsEngine:
         action_rates = pd.crosstab(long_df["termination_type"], long_df["action"], normalize="index") * 100
         combined = match_agg.join(action_rates).fillna(0.0)
         return combined.round(2)
+
+    def _compute_sanity_stats(self, valid_df: pd.DataFrame, long_df: pd.DataFrame) -> dict:
+        """Aggregate sanity check retry counts, hardcoded fallbacks, and failure reasons."""
+        reason_totals: dict[str, int] = {}
+        for col in ("sanity_fail_reasons_A", "sanity_fail_reasons_B"):
+            for reasons_dict in valid_df[col]:
+                if isinstance(reasons_dict, dict):
+                    for k, v in reasons_dict.items():
+                        reason_totals[k] = reason_totals.get(k, 0) + int(v)
+
+        reason_df = (
+            pd.DataFrame(
+                sorted(reason_totals.items(), key=lambda x: x[1], reverse=True),
+                columns=["reason", "count"],
+            )
+            if reason_totals
+            else pd.DataFrame(columns=["reason", "count"])
+        )
+        if not reason_df.empty:
+            reason_df["share_pct"] = ((reason_df["count"] / reason_df["count"].sum()) * 100).round(2)
+
+        tier_action_pct = (pd.crosstab(long_df["sanity_tier"], long_df["action"], normalize="index") * 100).round(2)
+        return {
+            "reason_breakdown": reason_df,
+            "strategy_by_sanity_tier_pct": tier_action_pct,
+        }
+
+    def _test_sanity_vs_action(self, long_df: pd.DataFrame) -> dict:
+        """Test whether sanity retries or intervention tier correlate with chosen strategy."""
+        results = {}
+        actions = sorted(long_df["action"].unique())
+        if len(actions) >= 2:
+            g0 = long_df[long_df["action"] == actions[0]]["sanity_retries"]
+            g1 = long_df[long_df["action"] == actions[1]]["sanity_retries"]
+            u_stat, p_val = stats.mannwhitneyu(g0, g1, alternative="two-sided")
+            results["retries_mann_whitney"] = {
+                "compared_actions": f"{actions[0]} vs {actions[1]}",
+                "u_statistic": round(float(u_stat), 4),
+                "p_value": round(float(p_val), 4),
+                "significant_005": bool(p_val < 0.05),
+            }
+
+        ct_tier = pd.crosstab(long_df["sanity_tier"], long_df["action"])
+        if ct_tier.shape[0] > 1 and ct_tier.shape[1] > 1:
+            chi2, p_val, dof, _ = stats.chi2_contingency(ct_tier)
+            results["sanity_tier_vs_action"] = {
+                "chi2": round(float(chi2), 4),
+                "p_value": round(float(p_val), 4),
+                "dof": int(dof),
+                "significant_005": bool(p_val < 0.05),
+            }
+        else:
+            results["sanity_tier_vs_action"] = {"note": "Insufficient variance for Chi-square test."}
+        return results
 
     def _test_chi_square_independence(self, long_df: pd.DataFrame) -> dict:
         """
@@ -577,6 +663,11 @@ class StatsEngine:
                 "max_exchange_turns": int(valid_df["turns"].max()),
                 "done_termination_rate_pct": round(float(valid_df["has_done"].mean() * 100), 2),
                 "mean_done_per_100_words": round(float(valid_df["done_per_100_words"].mean()), 3),
+                "total_sanity_retries": int(valid_df["total_sanity_retries"].sum()),
+                "mean_sanity_retries_per_match": round(float(valid_df["total_sanity_retries"].mean()), 2),
+                "retry_match_rate_pct": round(float((valid_df["total_sanity_retries"] > 0).mean() * 100), 2),
+                "total_hardcoded_fallbacks": int(valid_df["total_hardcoded_fallbacks"].sum()),
+                "hardcoded_fallback_match_rate_pct": round(float(valid_df["has_hardcoded_fallback"].mean() * 100), 2),
             },
             "action_rates_pct": self._compute_action_rates(long_df),
             "outcome_matrix_pct": self._compute_outcome_matrix(valid_df),
@@ -594,6 +685,10 @@ class StatsEngine:
         self.results["outcome_matrix_pct"].to_csv(os.path.join(export_dir, "outcome_matrix.csv"))
         self.results["payoff_stats"].to_csv(os.path.join(export_dir, "payoff_stats.csv"))
         self.results["termination_stats"].to_csv(os.path.join(export_dir, "termination_stats.csv"))
+        sanity_info = self._compute_sanity_stats(valid_df, long_df)
+        self.results["sanity_stats"] = sanity_info
+        self.results["sanity_vs_action_test"] = self._test_sanity_vs_action(long_df)
+        sanity_info["reason_breakdown"].to_csv(os.path.join(export_dir, "sanity_fail_reasons.csv"), index=False)
 
         stats_summary = {
             "meta": self.results["meta"],
@@ -601,7 +696,9 @@ class StatsEngine:
             "termination_independence_test": self.results["termination_independence_test"],
             "symmetry_binomial_test": self.results["symmetry_binomial_test"],
             "payoff_mann_whitney_test": self.results["payoff_mann_whitney_test"],
-            "verbosity_correlation_test": self.results["verbosity_correlation_test"]
+            "verbosity_correlation_test": self.results["verbosity_correlation_test"],
+            "sanity_stats": self.results["sanity_stats"],
+            "sanity_vs_action_test": self.results["sanity_vs_action_test"]
         }
         with open(os.path.join(export_dir, "statistical_tests.json"), "w", encoding="utf-8") as f:
             json.dump(stats_summary, f, indent=4)
@@ -1110,8 +1207,174 @@ class Graphs:
         self._plot_termination_vs_cooperation(valid_df, long_df)
         self._plot_exchange_length_mean_variance(valid_df, turn_df)
         self._plot_done_timing_and_turn_trajectory(turn_df)
+        self._plot_sanity_checks_overview(valid_df)
+        self._plot_sanity_retries_vs_strategy(long_df)
         print(f"Graphs saved successfully in the folder '{self.output_dir}/'.")
 
+    def _plot_sanity_checks_overview(self, valid_df: pd.DataFrame):
+        """
+        Visualize sanity-check diagnostics across valid matches:
+        - Left panel: breakdown of triggered sanity-check rejection reasons.
+        - Right panel: match distribution across retry/fallback intervention tiers.
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.0))
+
+        # Left panel: aggregated failure reasons
+        reason_totals: dict[str, int] = {}
+        for col in ("sanity_fail_reasons_A", "sanity_fail_reasons_B"):
+            for reasons_dict in valid_df[col]:
+                if isinstance(reasons_dict, dict):
+                    for k, v in reasons_dict.items():
+                        reason_totals[k] = reason_totals.get(k, 0) + int(v)
+
+        if reason_totals:
+            reason_df = (
+                pd.DataFrame(sorted(reason_totals.items(), key=lambda x: x[1], reverse=True), columns=["reason", "count"])
+            )
+            total_fails = reason_df["count"].sum()
+            ax0 = sns.barplot(
+                data=reason_df,
+                y="reason",
+                x="count",
+                color=self.primary_blue,
+                ax=axes[0],
+            )
+            max_cnt = reason_df["count"].max()
+            for bar, cnt in zip(ax0.patches, reason_df["count"]):
+                pct = (cnt / total_fails) * 100
+                ax0.text(
+                    cnt + max(0.15, max_cnt * 0.02),
+                    bar.get_y() + bar.get_height() / 2,
+                    f"{cnt} ({pct:.1f}%)",
+                    va="center",
+                    fontsize=9.5,
+                )
+            axes[0].set_xlim(0, max_cnt * 1.25)
+            axes[0].set_title("Sanity Check Rejection Reasons", fontsize=12)
+            axes[0].set_xlabel("Triggered Rejections (Count)", fontsize=11)
+            axes[0].set_ylabel("")
+        else:
+            axes[0].text(0.5, 0.5, "No sanity check retries triggered\n(100% clean first-pass)", ha="center", va="center", fontsize=11)
+            axes[0].set_title("Sanity Check Rejection Reasons", fontsize=12)
+            axes[0].set_axis_off()
+
+        # Right panel: match-level intervention tiers
+        def _match_tier(row) -> str:
+            if row["total_hardcoded_fallbacks"] > 0:
+                return "Hardcoded\nFallback (>10)"
+            if row["total_sanity_retries"] == 0:
+                return "Clean\n(0 retries)"
+            if row["total_sanity_retries"] <= 3:
+                return "Light Retry\n(1–3 retries)"
+            return "Heavy Retry\n(4–10 retries)"
+
+        tier_order = [
+            "Clean\n(0 retries)",
+            "Light Retry\n(1–3 retries)",
+            "Heavy Retry\n(4–10 retries)",
+            "Hardcoded\nFallback (>10)",
+        ]
+        tiers = valid_df.apply(_match_tier, axis=1)
+        tier_counts = tiers.value_counts().reindex(tier_order, fill_value=0)
+        tier_df = pd.DataFrame({"tier": tier_counts.index, "matches": tier_counts.values})
+        tier_palette = [self.primary_green, "#74c69d", self.primary_blue, "#dc2626"]
+
+        ax1 = sns.barplot(
+            data=tier_df,
+            x="tier",
+            y="matches",
+            hue="tier",
+            hue_order=tier_order,
+            dodge=False,
+            palette=tier_palette,
+            ax=axes[1],
+        )
+        if axes[1].get_legend():
+            axes[1].get_legend().remove()
+
+        n_matches = max(len(valid_df), 1)
+        for bar, cnt in zip(ax1.patches, tier_df["matches"]):
+            pct = (cnt / n_matches) * 100
+            ax1.text(
+                bar.get_x() + bar.get_width() / 2,
+                cnt + max(0.15, tier_df["matches"].max() * 0.02),
+                f"{cnt}\n({pct:.1f}%)",
+                ha="center",
+                va="bottom",
+                fontsize=9.5,
+            )
+        axes[1].set_ylim(0, max(tier_df["matches"].max() * 1.24, 1.5))
+        axes[1].set_title("Match Distribution by Sanity Intervention", fontsize=12)
+        axes[1].set_xlabel("")
+        axes[1].set_ylabel("Number of Matches", fontsize=11)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, "sanity_checks_overview.png"), dpi=300)
+        plt.close()
+
+    def _plot_sanity_retries_vs_strategy(self, long_df: pd.DataFrame):
+        """
+        Analyze whether sanity retries or hardcoded fallbacks are associated with final strategy:
+        - Left panel: distribution of sanity retries per agent by chosen strategy.
+        - Right panel: strategy rates (%) across agent sanity intervention tiers.
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.0))
+        actions = sorted(long_df["action"].unique())
+        palette = self._get_strategy_palette(actions)
+
+        # Left panel: retries by strategy
+        sns.boxplot(
+            data=long_df,
+            x="action",
+            y="sanity_retries",
+            order=actions,
+            hue="action",
+            hue_order=actions,
+            dodge=False,
+            palette=palette,
+            boxprops={"alpha": 0.85},
+            width=0.45,
+            ax=axes[0],
+        )
+        if axes[0].get_legend():
+            axes[0].get_legend().remove()
+
+        sns.stripplot(
+            data=long_df,
+            x="action",
+            y="sanity_retries",
+            order=actions,
+            color="#1f2937",
+            alpha=0.45,
+            jitter=0.15,
+            ax=axes[0],
+        )
+        axes[0].set_title("Sanity Retries per Agent by Strategy", fontsize=12)
+        axes[0].set_xlabel("Strategy", fontsize=11)
+        axes[0].set_ylabel("Sanity Retries", fontsize=11)
+
+        # Right panel: strategy rates by sanity intervention tier
+        tier_order = [
+            t for t in ["Clean (0 Retries)", "Corrected (1-10 Retries)", "Hardcoded Fallback"]
+            if t in long_df["sanity_tier"].unique()
+        ]
+        ct_tier = (pd.crosstab(long_df["sanity_tier"], long_df["action"], normalize="index") * 100).reindex(tier_order)
+        tier_counts = long_df["sanity_tier"].value_counts()
+        ct_tier.index = [f"{t}\n(n={tier_counts.get(t, 0)} agents)" for t in ct_tier.index]
+        melted_tier = ct_tier.reset_index().melt(id_vars="index", var_name="action", value_name="percentage")
+
+        ax1 = sns.barplot(data=melted_tier, x="index", y="percentage", hue="action", palette=palette, ax=axes[1])
+        for container in ax1.containers:
+            ax1.bar_label(container, fmt="%.1f%%", padding=3, fontsize=9.5)
+        axes[1].set_title("Strategy Choice by Sanity Intervention", fontsize=12)
+        axes[1].set_xlabel("")
+        axes[1].set_ylabel("Strategy Share (%)", fontsize=11)
+        axes[1].set_ylim(0, 114)
+        axes[1].legend(title="Strategy")
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, "sanity_retries_vs_strategy.png"), dpi=300)
+        plt.close()
 
 class ChatReport:
     def __init__(self, dataset: DataSet, output_dir: str = "reports"):
@@ -1585,19 +1848,136 @@ class ChatReport:
         print(f"HTML conversation report saved to '{output_path}'.")
         return output_path
 
+def summarize_explanations(
+    json_path: str = "data/response_history.json",
+    output_path: str = "reports/explanations_summary.txt",
+    model_name: str = "gemma4",
+) -> str:
+    """
+    Read only the final answers and explanations from the simulation JSON history,
+    group them by outcome case with exact occurrence counts, and ask the local
+    Ollama model (gemma4) to generate a concise English synthesis saved to a .txt file.
+    """
+    with open(json_path, "r", encoding="utf-8") as f:
+        records = json.load(f)
+
+    cases = {
+        "Mutual Cooperation (COOPERATE / COOPERATE)": [],
+        "Mutual Defection (DEFECT / DEFECT)": [],
+        "Asymmetric — Defector Rationale (DEFECT vs. partner's COOPERATE)": [],
+        "Asymmetric — Cooperator Rationale (COOPERATE vs. partner's DEFECT)": [],
+    }
+    action_counts = {"COOPERATE": 0, "DEFECT": 0}
+    valid_matches = 0
+    error_matches = 0
+
+    for rec in records:
+        act_a = str(rec.get("agentA", {}).get("answer", "")).strip().upper()
+        act_b = str(rec.get("agentB", {}).get("answer", "")).strip().upper()
+        expl_a = str(rec.get("agentA", {}).get("explanation", "")).strip()
+        expl_b = str(rec.get("agentB", {}).get("explanation", "")).strip()
+
+        if act_a == "[ERROR]" or act_b == "[ERROR]" or not act_a or not act_b:
+            error_matches += 1
+            continue
+
+        valid_matches += 1
+        for act in (act_a, act_b):
+            action_counts[act] = action_counts.get(act, 0) + 1
+
+        if act_a == "COOPERATE" and act_b == "COOPERATE":
+            cases["Mutual Cooperation (COOPERATE / COOPERATE)"].extend([expl_a, expl_b])
+        elif act_a == "DEFECT" and act_b == "DEFECT":
+            cases["Mutual Defection (DEFECT / DEFECT)"].extend([expl_a, expl_b])
+        elif act_a == "DEFECT" and act_b == "COOPERATE":
+            cases["Asymmetric — Defector Rationale (DEFECT vs. partner's COOPERATE)"].append(expl_a)
+            cases["Asymmetric — Cooperator Rationale (COOPERATE vs. partner's DEFECT)"].append(expl_b)
+        elif act_a == "COOPERATE" and act_b == "DEFECT":
+            cases["Asymmetric — Cooperator Rationale (COOPERATE vs. partner's DEFECT)"].append(expl_a)
+            cases["Asymmetric — Defector Rationale (DEFECT vs. partner's COOPERATE)"].append(expl_b)
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+    if valid_matches == 0:
+        empty_msg = "No valid final explanations found in the dataset.\n"
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(empty_msg)
+        return empty_msg
+
+    # Build a clean payload containing ONLY final decisions, exact counts, and explanations
+    total_decisions = valid_matches * 2
+    mutual_coop_matches = len(cases["Mutual Cooperation (COOPERATE / COOPERATE)"]) // 2
+    mutual_def_matches = len(cases["Mutual Defection (DEFECT / DEFECT)"]) // 2
+    asym_matches = len(cases["Asymmetric — Defector Rationale (DEFECT vs. partner's COOPERATE)"])
+
+    sections = [
+        f"OVERALL COUNTS (Valid Matches: {valid_matches}, Total Agent Decisions: {total_decisions}, Parsing Errors: {error_matches})",
+        f"- COOPERATE choices: {action_counts.get('COOPERATE', 0)}/{total_decisions}",
+        f"- DEFECT choices: {action_counts.get('DEFECT', 0)}/{total_decisions}",
+        f"- Mutual Cooperation matches: {mutual_coop_matches}/{valid_matches}",
+        f"- Mutual Defection matches: {mutual_def_matches}/{valid_matches}",
+        f"- Asymmetric (Betrayal) matches: {asym_matches}/{valid_matches}",
+        "",
+        "FINAL EXPLANATIONS GROUPED BY CASE:",
+    ]
+
+    for case_name, expl_list in cases.items():
+        sections.append(f"\n### {case_name} (n={len(expl_list)} agent explanations)")
+        if not expl_list:
+            sections.append("- None")
+        else:
+            for i, text in enumerate(expl_list, start=1):
+                sections.append(f"{i}. {text}")
+
+    payload = "\n".join(sections)
+
+    prompt = (
+        "You are analyzing the final post-negotiation explanations produced by LLM agents in a one-shot Prisoner's Dilemma experiment.\n"
+        "Based ONLY on the exact counts and final explanations provided below, write a clear, concise, well-structured summary in English.\n"
+        "Requirements:\n"
+        "1. Start with a brief overview reporting the exact overall choice and match outcome counts.\n"
+        "2. Organize the body into clear sections corresponding to each outcome case, explicitly stating the exact occurrence count (n) for every case.\n"
+        "3. For each case, synthesize the main recurring arguments, strategic motivations, and trust/risk rationales used by the models.\n"
+        "4. Keep the tone analytical and concise; do not invent numbers or cite anything outside the provided explanations.\n\n"
+        f"{payload}"
+    )
+
+    response = ollama.chat(
+        model=model_name,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    summary_text = response["message"]["content"]
+    summary_text = re.sub(r"<think>.*?</think>", "", summary_text, flags=re.DOTALL | re.IGNORECASE).strip()
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(summary_text + "\n")
+
+    print(f"Explanations summary saved to '{output_path}'.")
+    return summary_text
+
+
+def generate_all_pipeline():
+    # Create a new dataset from the response history
+        dataset = DataSet("data/response_history.json")
+    
+        # Run all analyses on the dataset and export results to the "reports" directory
+        stats_engine = StatsEngine(dataset)
+        stats_engine.run_all_analyses(export_dir="reports")
+        
+        # Generate graphs from the dataset
+        graphs = Graphs(dataset, output_dir="reports")
+        graphs.generate_all_graphs()
+    
+        # Generate HTML report
+        chat_report = ChatReport(dataset, output_dir="reports")
+        chat_report.generate_html_report()
+    
+        # Generate English summary of final explanations via local Gemma 4
+        summarize_explanations(
+            json_path="data/response_history.json",
+            output_path="reports/explanations_summary.txt",
+            model_name="gemma4",
+        )
 
 if __name__ == "__main__":  
-    # Create a new dataset from the response history
-    dataset = DataSet("data/response_history.json")
-
-    # Run all analyses on the dataset and export results to the "reports" directory
-    stats_engine = StatsEngine(dataset)
-    stats_engine.run_all_analyses(export_dir="reports")
-    
-    # Generate graphs from the dataset
-    graphs = Graphs(dataset, output_dir="reports")
-    graphs.generate_all_graphs()
-
-    # Generate HTML report
-    chat_report = ChatReport(dataset, output_dir="reports")
-    chat_report.generate_html_report()
+    generate_all_pipeline()

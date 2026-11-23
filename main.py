@@ -1,6 +1,6 @@
 import argparse
 from orchestrator import Orchestrator
-from intel import DataSet, StatsEngine, Graphs, ChatReport
+from intel import generate_all_pipeline
 
 def main():
     parser = argparse.ArgumentParser(description="Run socio-political game theory simulation with LLM agents.")
@@ -31,20 +31,8 @@ def main():
         orchestrator.reset()  # Reset the orchestrator for a new conversation if needed
     orchestrator.save_response_history()  # Save the response history to a JSON file
     
-    # Create a new dataset from the response history
-    dataset = DataSet("data/response_history.json")
-
-    # Run all analyses on the dataset and export results to the "reports" directory
-    stats_engine = StatsEngine(dataset)
-    stats_engine.run_all_analyses(export_dir="reports")
-    
-    # Generate graphs from the dataset
-    graphs = Graphs(dataset, output_dir="reports")
-    graphs.generate_all_graphs()
-
-    # Generate HTML report
-    chat_report = ChatReport(dataset, output_dir="reports")
-    chat_report.generate_html_report()
+    # Generate the report and explanations summary after all repetitions are completed
+    generate_all_pipeline()
 
 
 if __name__ == "__main__":
