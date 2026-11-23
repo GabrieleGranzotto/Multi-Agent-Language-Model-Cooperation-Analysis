@@ -164,13 +164,13 @@ The value for "answer" MUST be either "{actions_list[0]}" or "{actions_list[1]}"
             return self._record_sanity_fail("special_tokens")
 
         # 2. Check for [DONE] tag: not allowed in the first opening turn
-        has_done = bool(re.search(r"[DONE]", cleaned, flags=re.IGNORECASE))
+        has_done = bool(re.search(r"\[DONE\]", cleaned, flags=re.IGNORECASE))
         agent_turns_so_far = sum(1 for m in self.messages if m["role"] == "assistant")
         if has_done and agent_turns_so_far == 0:
             return self._record_sanity_fail("early_done")
 
         # Remove [DONE] to check the actual discursive content
-        body = re.sub(r"[DONE]", "", cleaned, flags=re.IGNORECASE).strip()
+        body = re.sub(r"\[DONE\]", "", cleaned, flags=re.IGNORECASE).strip()
 
         # 3. Empty or non-informative message (e.g., only punctuation, numbers, or whitespace)
         if not body or not re.search(r"[a-zA-Z]{2,}", body):
