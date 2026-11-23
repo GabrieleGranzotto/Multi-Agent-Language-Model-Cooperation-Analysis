@@ -690,6 +690,7 @@ class StatsEngine:
         self.results["sanity_stats"] = sanity_info
         self.results["sanity_vs_action_test"] = self._test_sanity_vs_action(long_df)
         sanity_info["reason_breakdown"].to_csv(os.path.join(export_dir, "sanity_fail_reasons.csv"), index=False)
+        sanity_info["strategy_by_sanity_tier_pct"].to_csv(os.path.join(export_dir, "strategy_by_sanity_tier.csv"))
 
         stats_summary = {
             "meta": self.results["meta"],
@@ -698,8 +699,7 @@ class StatsEngine:
             "symmetry_binomial_test": self.results["symmetry_binomial_test"],
             "payoff_mann_whitney_test": self.results["payoff_mann_whitney_test"],
             "verbosity_correlation_test": self.results["verbosity_correlation_test"],
-            "sanity_stats": self.results["sanity_stats"],
-            "sanity_vs_action_test": self.results["sanity_vs_action_test"]
+            "sanity_vs_action_test": self.results["sanity_vs_action_test"],
         }
         with open(os.path.join(export_dir, "statistical_tests.json"), "w", encoding="utf-8") as f:
             json.dump(stats_summary, f, indent=4)
