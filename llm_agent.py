@@ -181,10 +181,9 @@ The value for "answer" MUST be either "{actions_list[0]}" or "{actions_list[1]}"
             return self._record_sanity_fail("too_long")
 
         # 5. Spoofing of system roles, referee, or opponent speaker prefix at line start
-        spoof_pattern = (
-            rf"(?im)^\s*(?:\[(?:SYSTEM\vert{}JUDGE\vert{}SYSTEM_JUDGE\vert{}{re.escape(str(self.opponent_id))})\]"
-            rf"|(?:SYSTEM|JUDGE|REFEREE|PLAYER\s*[AB]))\s*:"
-        )
+        spoof_tags = "|".join(["SYSTEM", "JUDGE", "SYSTEM_JUDGE", re.escape(str(self.opponent_id))])
+        spoof_prefixes = "|".join(["SYSTEM", "JUDGE", "REFEREE", r"PLAYER\s*[AB]"])
+        spoof_pattern = rf"(?im)^\s*(?:\[(?:{spoof_tags})\]|(?:{spoof_prefixes}))\s*:"
         if re.search(spoof_pattern, body):
             return self._record_sanity_fail("role_spoof")
 
