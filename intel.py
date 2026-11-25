@@ -1880,8 +1880,10 @@ def _summarize_bucket(
             f"Category: {category_label} (batch {idx}/{len(chunks)}, {len(chunk)} explanations).\n"
             f"{focus_instruction}\n\n"
             f"Explanations:\n{numbered}\n\n"
-            f"Provide a concise, structured synthesis of the recurring reasoning patterns, key arguments, and psychological/strategic drivers."
+            f"Format your response in clean Markdown using ONLY '###' and '####' subheadings (do not use '#' or '##', and do not add separate Executive Summary or Conclusion headers). "
+            f"Provide a concise, structured synthesis of the recurring reasoning patterns, key arguments, and strategic drivers."
         )
+
         response = ollama.chat(
             model=model_name,
             messages=[{"role": "user", "content": prompt}],
@@ -1909,7 +1911,7 @@ def _summarize_bucket(
 
 def summarize_explanations(
     json_path: str = "data/response_history.json",
-    output_path: str = "reports/explanations_summary.txt",
+    output_path: str = "reports/explanations_summary.md",
     model_name: str = "gemma4",
     chunk_size: int = 30,
 ) -> str:
@@ -2004,7 +2006,7 @@ def generate_all_pipeline(
 
     summarize_explanations(
         json_path=json_path,
-        output_path=os.path.join(output_dir, "explanations_summary.txt"),
+        output_path=os.path.join(output_dir, "explanations_summary.md"),
         model_name=model_name,
     )
 
