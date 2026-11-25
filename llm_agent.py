@@ -1,7 +1,7 @@
 import os, time, re, json, ollama, random
 
 class OllamaAgent:
-    def __init__(self, game, model_name: str = "gemma4", debug: bool = False):
+    def __init__(self, game, model_name: str = "gemma4", debug: bool = False, allow_negotiation: bool = True):
         self.model_name = model_name
         self.game = game
         self.messages = []
@@ -10,6 +10,7 @@ class OllamaAgent:
         self.hardcoded_fallbacks = 0
         self.sanity_fail_reasons: dict[str, int] = {}
         self.debug = debug
+        self.allow_negotiation = allow_negotiation
 
     def handshake(self, opponent_agent: "OllamaAgent") -> None:
         """
@@ -79,6 +80,19 @@ class OllamaAgent:
         """
         Define the context for the agent's behavior and capabilities.
         """
+        if not self.allow_negotiation:
+            context = f"""
+You are an autonomous agent called [{self.id}] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [{self.opponent_id}].
+Your goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.
+
+Description of the game:
+{self.game.description}
+
+Current Phase — Simultaneous Decision (No Communication):
+There is NO pre-game chat or communication with [{self.opponent_id}]. Both of you must choose your actions simultaneously and independently without exchanging any messages.
+        """.strip()
+            self._add_message("system", context)
+            return
         context = f"""
 You are an autonomous agent called [{self.id}] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [{self.opponent_id}].
 Your goal is to secure the best possible outcome for yourself. To do so, you must carefully weigh the mathematical risks of the payoff matrix and evaluate how much you can actually trust the other agent based on your conversation.
@@ -120,12 +134,18 @@ You are chatting directly with the other participant, referred to as [{self.oppo
         """
         user = "JUDGE"
         actions_list = list(self.game.actions)
+        intro = (
+            f"The negotiation phase is now closed, and you can no longer communicate with [{self.opponent_id}]."
+            if self.allow_negotiation
+            else f"There is no communication phase in this experiment, so you cannot interact with [{self.opponent_id}]."
+        )
         final_message = f"""
-The negotiation phase is now closed, and you can no longer communicate with [{self.opponent_id}]. It is time to make your final, binding decision for this one-shot Prisoner's Dilemma.
+{intro} It is time to make your final, binding decision for this one-shot Prisoner's Dilemma.
 Respond strictly in the following standardized JSON format and nothing else:
 {{"explanation": "<concise explanation of the reasoning behind your chosen answer>", "answer": "<{actions_list[0]} or {actions_list[1]}>"}}
 The value for "answer" MUST be either "{actions_list[0]}" or "{actions_list[1]}".
 """.strip()
+
         self.listen(user=user, prompt=final_message)
         raw_response = self.respond(json_mode=True)
         try:

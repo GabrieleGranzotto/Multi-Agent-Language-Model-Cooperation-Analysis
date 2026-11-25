@@ -1,5 +1,5 @@
 from matplotlib.colors import LinearSegmentedColormap
-import os, json, html, re, ollama
+import os, json, html, re, argparse, ollama
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -1563,136 +1563,163 @@ class ChatReport:
         print(f"HTML conversation report saved to '{output_path}'.")
         return output_path
 
+    
+def _summarize_bucket(
+    explanations: list[str],
+    category_label: str,
+    focus_instruction: str,
+    model_name: str = "gemma4",
+    chunk_size: int = 30,
+) -> str:
+    if not explanations:
+        return "No instances recorded in this category."
+
+    chunks = [explanations[i : i + chunk_size] for i in range(0, len(explanations), chunk_size)]
+    partial_summaries = []
+
+    for idx, chunk in enumerate(chunks, start=1):
+        numbered = "\n".join(f"- {text}" for text in chunk)
+        prompt = (
+            f"You are analyzing post-game decision explanations from a Prisoner's Dilemma experiment.\n"
+            f"Category: {category_label} (batch {idx}/{len(chunks)}, {len(chunk)} explanations).\n"
+            f"{focus_instruction}\n\n"
+            f"Explanations:\n{numbered}\n\n"
+            f"Provide a concise, structured synthesis of the recurring reasoning patterns, key arguments, and psychological/strategic drivers."
+        )
+        response = ollama.chat(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            options={"num_ctx": 16384},
+        )
+        partial_summaries.append(response["message"]["content"].strip())
+
+    if len(partial_summaries) == 1:
+        return partial_summaries[0]
+
+    combined = "\n\n---\n\n".join(
+        f"Batch {i + 1} Summary:\n{summary}" for i, summary in enumerate(partial_summaries)
+    )
+    reduce_prompt = (
+        f"Synthesize the following batch summaries for the '{category_label}' category "
+        f"({len(explanations)} total explanations) into a single coherent, non-redundant analysis:\n\n{combined}"
+    )
+    final_response = ollama.chat(
+        model=model_name,
+        messages=[{"role": "user", "content": reduce_prompt}],
+        options={"num_ctx": 16384},
+    )
+    return final_response["message"]["content"].strip()
+
+
 def summarize_explanations(
     json_path: str = "data/response_history.json",
     output_path: str = "reports/explanations_summary.txt",
     model_name: str = "gemma4",
+    chunk_size: int = 30,
 ) -> str:
-    """
-    Read only the final answers and explanations from the simulation JSON history,
-    group them by outcome case with exact occurrence counts, and ask the local
-    Ollama model (gemma4) to generate a concise English synthesis saved to a .txt file.
-    """
     with open(json_path, "r", encoding="utf-8") as f:
         records = json.load(f)
 
-    cases = {
-        "Mutual Cooperation (COOPERATE / COOPERATE)": [],
-        "Mutual Defection (DEFECT / DEFECT)": [],
-        "Asymmetric — Defector Rationale (DEFECT vs. partner's COOPERATE)": [],
-        "Asymmetric — Cooperator Rationale (COOPERATE vs. partner's DEFECT)": [],
+    buckets = {
+        "mutual_cooperation": [],  # C / C -> entrambe le spiegazioni
+        "mutual_defection": [],    # D / D -> entrambe le spiegazioni
+        "betrayed": [],            # C / D -> solo il lato COOPERATE (tradito)
+        "betrayers": [],           # D / C -> solo il lato DEFECT (traditore)
     }
-    action_counts = {"COOPERATE": 0, "DEFECT": 0}
-    valid_matches = 0
-    error_matches = 0
 
     for rec in records:
-        act_a = str(rec.get("agentA", {}).get("answer", "")).strip().upper()
-        act_b = str(rec.get("agentB", {}).get("answer", "")).strip().upper()
-        expl_a = str(rec.get("agentA", {}).get("explanation", "")).strip()
-        expl_b = str(rec.get("agentB", {}).get("explanation", "")).strip()
+        ans_a = rec["agentA"]["answer"]
+        ans_b = rec["agentB"]["answer"]
+        expl_a = rec["agentA"]["explanation"]
+        expl_b = rec["agentB"]["explanation"]
 
-        if act_a == "[ERROR]" or act_b == "[ERROR]" or not act_a or not act_b:
-            error_matches += 1
-            continue
+        if ans_a == "COOPERATE" and ans_b == "COOPERATE":
+            buckets["mutual_cooperation"].extend([expl_a, expl_b])
+        elif ans_a == "DEFECT" and ans_b == "DEFECT":
+            buckets["mutual_defection"].extend([expl_a, expl_b])
+        elif ans_a == "COOPERATE" and ans_b == "DEFECT":
+            buckets["betrayed"].append(expl_a)
+            buckets["betrayers"].append(expl_b)
+        elif ans_a == "DEFECT" and ans_b == "COOPERATE":
+            buckets["betrayers"].append(expl_a)
+            buckets["betrayed"].append(expl_b)
 
-        valid_matches += 1
-        for act in (act_a, act_b):
-            action_counts[act] = action_counts.get(act, 0) + 1
-
-        if act_a == "COOPERATE" and act_b == "COOPERATE":
-            cases["Mutual Cooperation (COOPERATE / COOPERATE)"].extend([expl_a, expl_b])
-        elif act_a == "DEFECT" and act_b == "DEFECT":
-            cases["Mutual Defection (DEFECT / DEFECT)"].extend([expl_a, expl_b])
-        elif act_a == "DEFECT" and act_b == "COOPERATE":
-            cases["Asymmetric — Defector Rationale (DEFECT vs. partner's COOPERATE)"].append(expl_a)
-            cases["Asymmetric — Cooperator Rationale (COOPERATE vs. partner's DEFECT)"].append(expl_b)
-        elif act_a == "COOPERATE" and act_b == "DEFECT":
-            cases["Asymmetric — Cooperator Rationale (COOPERATE vs. partner's DEFECT)"].append(expl_a)
-            cases["Asymmetric — Defector Rationale (DEFECT vs. partner's COOPERATE)"].append(expl_b)
-
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-
-    if valid_matches == 0:
-        empty_msg = "No valid final explanations found in the dataset.\n"
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(empty_msg)
-        return empty_msg
-
-    # Build a clean payload containing ONLY final decisions, exact counts, and explanations
-    total_decisions = valid_matches * 2
-    mutual_coop_matches = len(cases["Mutual Cooperation (COOPERATE / COOPERATE)"]) // 2
-    mutual_def_matches = len(cases["Mutual Defection (DEFECT / DEFECT)"]) // 2
-    asym_matches = len(cases["Asymmetric — Defector Rationale (DEFECT vs. partner's COOPERATE)"])
-
-    sections = [
-        f"OVERALL COUNTS (Valid Matches: {valid_matches}, Total Agent Decisions: {total_decisions}, Parsing Errors: {error_matches})",
-        f"- COOPERATE choices: {action_counts.get('COOPERATE', 0)}/{total_decisions}",
-        f"- DEFECT choices: {action_counts.get('DEFECT', 0)}/{total_decisions}",
-        f"- Mutual Cooperation matches: {mutual_coop_matches}/{valid_matches}",
-        f"- Mutual Defection matches: {mutual_def_matches}/{valid_matches}",
-        f"- Asymmetric (Betrayal) matches: {asym_matches}/{valid_matches}",
-        "",
-        "FINAL EXPLANATIONS GROUPED BY CASE:",
+    categories_spec = [
+        (
+            "mutual_cooperation",
+            "1. ENTRAMBI FEDELI (Mutual Cooperation: COOPERATE / COOPERATE)",
+            "Analyze why both agents chose to cooperate and honor mutual trust over the dominant strategy.",
+        ),
+        (
+            "mutual_defection",
+            "2. ENTRAMBI SLEALI (Mutual Defection: DEFECT / DEFECT)",
+            "Analyze why both agents converged on defection (mistrust, risk aversion, or pure Nash equilibrium reasoning).",
+        ),
+        (
+            "betrayed",
+            "3. TRADITI (Exploited Cooperators: COOPERATE against DEFECT)",
+            "Analyze ONLY the perspective of the agents who cooperated while their opponent defected: what led them to trust or accept the risk?",
+        ),
+        (
+            "betrayers",
+            "4. TRADITORI (Opportunistic Defectors: DEFECT against COOPERATE)",
+            "Analyze ONLY the perspective of the agents who defected while their opponent cooperated: how did they justify exploiting the opponent's trust?",
+        ),
     ]
 
-    for case_name, expl_list in cases.items():
-        sections.append(f"\n### {case_name} (n={len(expl_list)} agent explanations)")
-        if not expl_list:
-            sections.append("- None")
-        else:
-            for i, text in enumerate(expl_list, start=1):
-                sections.append(f"{i}. {text}")
+    sections = [f"EXPLANATIONS SUMMARY (Total games analyzed: {len(records)})\n" + "=" * 60]
 
-    payload = "\n".join(sections)
-
-    prompt = (
-        "You are analyzing the final post-negotiation explanations produced by LLM agents in a one-shot Prisoner's Dilemma experiment.\n"
-        "Based ONLY on the exact counts and final explanations provided below, write a clear, concise, well-structured summary in English.\n"
-        "Requirements:\n"
-        "1. Start with a brief overview reporting the exact overall choice and match outcome counts.\n"
-        "2. Organize the body into clear sections corresponding to each outcome case, explicitly stating the exact occurrence count (n) for every case.\n"
-        "3. For each case, synthesize the main recurring arguments, strategic motivations, and trust/risk rationales used by the models.\n"
-        "4. Keep the tone analytical and concise; do not invent numbers or cite anything outside the provided explanations.\n\n"
-        f"{payload}"
-    )
-
-    response = ollama.chat(
-        model=model_name,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    summary_text = response["message"]["content"]
-    summary_text = re.sub(r"<think>.*?</think>", "", summary_text, flags=re.DOTALL | re.IGNORECASE).strip()
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(summary_text + "\n")
-
-    print(f"Explanations summary saved to '{output_path}'.")
-    return summary_text
-
-
-def generate_all_pipeline():
-    # Create a new dataset from the response history
-        dataset = DataSet("data/response_history.json")
-    
-        # Run all analyses on the dataset and export results to the "reports" directory
-        stats_engine = StatsEngine(dataset)
-        stats_engine.run_all_analyses(export_dir="reports")
-        
-        # Generate graphs from the dataset
-        graphs = Graphs(dataset, output_dir="reports")
-        graphs.generate_all_graphs()
-    
-        # Generate HTML report
-        chat_report = ChatReport(dataset, output_dir="reports")
-        chat_report.generate_html_report()
-    
-        # Generate English summary of final explanations via local Gemma 4
-        summarize_explanations(
-            json_path="data/response_history.json",
-            output_path="reports/explanations_summary.txt",
-            model_name="gemma4",
+    for key, title, focus in categories_spec:
+        items = buckets[key]
+        summary = _summarize_bucket(
+            explanations=items,
+            category_label=title,
+            focus_instruction=focus,
+            model_name=model_name,
+            chunk_size=chunk_size,
         )
+        sections.append(f"\n{title}\nCount: {len(items)} explanations\n{'-' * 60}\n{summary}")
 
-if __name__ == "__main__":  
-    generate_all_pipeline()
+    full_report = "\n".join(sections).strip() + "\n"
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(full_report)
+
+    return full_report
+
+
+def generate_all_pipeline(
+        json_path: str = "data/response_history.json",
+        output_dir: str = "reports",
+        model_name: str = "gemma4",
+):
+    dataset = DataSet(json_path)
+
+    stats_engine = StatsEngine(dataset)
+    stats_engine.run_all_analyses(export_dir=output_dir)
+
+    graphs = Graphs(dataset, output_dir=output_dir)
+    graphs.generate_all_graphs()
+
+    chat_report = ChatReport(dataset, output_dir=output_dir)
+    chat_report.generate_html_report()
+
+    summarize_explanations(
+        json_path=json_path,
+        output_path=os.path.join(output_dir, "explanations_summary.txt"),
+        model_name=model_name,
+    )
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Analyze simulation history and generate reports/graphs.")
+    parser.add_argument("-f", "--file", type=str, default="data/response_history.json", help="Path to the input simulation JSON file.")
+    parser.add_argument("-o", "--output_dir", type=str, default="reports", help="Directory where reports and graphs will be saved.")
+    parser.add_argument("-m", "--model_name", type=str, default="gemma4", help="LLM model name used to summarize explanations.")
+    args = parser.parse_args()
+
+    generate_all_pipeline(
+        json_path=args.file,
+        output_dir=args.output_dir,
+        model_name=args.model_name,
+    )

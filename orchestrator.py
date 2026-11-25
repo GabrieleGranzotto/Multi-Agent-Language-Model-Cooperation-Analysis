@@ -1,4 +1,4 @@
-import time, json, random
+import os, time, json, random
 from game_env import GameMatrix
 from llm_agent import OllamaAgent
 
@@ -11,6 +11,7 @@ class Orchestrator:
         randomize_start: bool = False,
         verbose: bool = False,
         debug: bool = False,
+        history_path: str = "data/response_history.json"
     ):
         self.max_turns = max_turns
         self.model_name = model_name
@@ -18,6 +19,7 @@ class Orchestrator:
         self.rand_start = randomize_start
         self.verbose = verbose
         self.debug = debug
+        self.history_path = history_path
         self.response_history = []
         self.game = GameMatrix.load_from_json("data/games.json", "prisoners_dilemma")
         self.reset()
@@ -27,8 +29,9 @@ class Orchestrator:
         Reset the system to take in memory just the single conversation.
         The inference should stay light and fast.
         """
-        agentA = OllamaAgent(self.game, model_name=self.model_name, debug=self.debug)
-        agentB = OllamaAgent(self.game, model_name=self.other_model_name, debug=self.debug)
+        allow_neg = self.max_turns > 0  # Allow negotiation if max_turns is greater than 0
+        agentA = OllamaAgent(self.game, model_name=self.model_name, debug=self.debug, allow_negotiation=allow_neg)
+        agentB = OllamaAgent(self.game, model_name=self.other_model_name, debug=self.debug, allow_negotiation=allow_neg)
         agentA.handshake(agentB)
         agentB.handshake(agentA)
         self.agentA_id = agentA.id
@@ -64,6 +67,8 @@ class Orchestrator:
         self._add_to_response_history()
 
     def _talking_phase(self, first_agent: OllamaAgent, other_agent: OllamaAgent):
+        if self.max_turns <= 0:
+            return  # Skip the talking phase if max_turns is 0 or less
         message = "Starting the conversation. Please discuss your strategy for the game."
         user = "JUDGE"
 
@@ -141,7 +146,9 @@ class Orchestrator:
         """
         Save the response history to a file.
         """
-        path = "data/response_history.json"
+        path = self.history_path
+        if os.path.dirname(path):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
         try:
             with open(path, "r") as f:
                 existing_history = json.load(f)
