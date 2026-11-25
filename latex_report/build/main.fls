@@ -1,8 +1,8 @@
-PWD /Users/mac_alpaca/Documents/Multi-Agent_Systems /MAS_Reports/MALLM_Report
+PWD /Users/mac_alpaca/Documents/Multi-Agent_Systems/MALLM/latex_report
 INPUT /usr/local/texlive/2026/texmf.cnf
 INPUT /usr/local/texlive/2026/texmf-dist/web2c/texmf.cnf
 INPUT /usr/local/texlive/2026/texmf-var/web2c/pdftex/pdflatex.fmt
-INPUT /Users/mac_alpaca/Documents/Multi-Agent_Systems /MAS_Reports/MALLM_Report/main.tex
+INPUT /Users/mac_alpaca/Documents/Multi-Agent_Systems/MALLM/latex_report/main.tex
 OUTPUT build/main.log
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/base/article.cls
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/base/article.cls
