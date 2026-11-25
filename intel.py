@@ -1,4 +1,5 @@
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.container import BarContainer
 import os, json, html, re, argparse, ollama
 import pandas as pd
 import numpy as np
@@ -736,6 +737,17 @@ class StatsEngine:
         }, indent=2))
         print("=" * 60 + "\n")
 
+    @staticmethod
+    def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+        """Compute Wilson score 95% confidence interval for a binomial proportion (in %)."""
+        if n == 0:
+            return 0.0, 0.0
+        p = k / n
+        denom = 1 + (z ** 2) / n
+        center = (p + (z ** 2) / (2 * n)) / denom
+        half_width = (z * np.sqrt((p * (1 - p) + (z ** 2) / (4 * n)) / n)) / denom
+        return max(0.0, (center - half_width) * 100), min(100.0, (center + half_width) * 100)
+
 
 class Graphs:
     def __init__(self, dataset: DataSet, output_dir: str = "reports"):
@@ -1377,6 +1389,290 @@ class Graphs:
         plt.savefig(os.path.join(self.output_dir, "sanity_retries_vs_strategy.png"), dpi=300)
         plt.close()
 
+
+class ComparisonGraphs:
+    def __init__(
+        self,
+        baseline_dataset: DataSet,
+        negotiation_dataset: DataSet,
+        output_dir: str = "reports/comparison",
+        baseline_label: str = "Baseline (0 Turns)",
+        negotiation_label: str = "Negotiation (Chat)",
+    ):
+        self.baseline_ds = baseline_dataset
+        self.neg_ds = negotiation_dataset
+        self.output_dir = output_dir
+        self.baseline_label = baseline_label
+        self.negotiation_label = negotiation_label
+        sns.set_theme(style="whitegrid", context="notebook")
+        self.primary_blue = "#31688e"
+        self.primary_green = "#35b779"
+        self.condition_palette = {
+            self.baseline_label: "#64748b",
+            self.negotiation_label: self.primary_blue,
+        }
+
+    def _plot_joint_outcomes_comparison(self, base_valid: pd.DataFrame, neg_valid: pd.DataFrame):
+        """
+        Compare joint outcome distributions between silent baseline and negotiation:
+        - Left panel: 4 canonical payoff matrix quadrants (C/C, C/D, D/C, D/D).
+        - Right panel: 3 strategic regimes with Chi-square shift test.
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(14.0, 5.4))
+
+        outcomes_4 = [
+            "COOPERATE / COOPERATE",
+            "COOPERATE / DEFECT",
+            "DEFECT / COOPERATE",
+            "DEFECT / DEFECT",
+        ]
+        short_4 = [
+            "C / C\n(Mutual Coop)",
+            "C / D\n(A Exploited)",
+            "D / C\n(B Exploited)",
+            "D / D\n(Mutual Defect)",
+        ]
+
+        rows_4 = []
+        for cond, df in [(self.baseline_label, base_valid), (self.negotiation_label, neg_valid)]:
+            n = len(df)
+            counts = df["joint_outcome"].value_counts()
+            for out, s_lbl in zip(outcomes_4, short_4):
+                c = int(counts.get(out, 0))
+                rows_4.append({
+                    "Condition": cond,
+                    "Outcome": s_lbl,
+                    "Percentage": (c / n * 100) if n > 0 else 0.0,
+                })
+        df_4 = pd.DataFrame(rows_4)
+
+        ax0 = sns.barplot(
+            data=df_4,
+            x="Outcome",
+            y="Percentage",
+            hue="Condition",
+            palette=self.condition_palette,
+            ax=axes[0],
+        )
+        for container in ax0.containers:
+            if isinstance(container, BarContainer):
+                ax0.bar_label(container, fmt="%.1f%%", padding=3, fontsize=9)
+        axes[0].set_title("Joint Outcomes Breakdown (4 Quadrants)", fontsize=12, fontweight="bold")
+        axes[0].set_xlabel("")
+        axes[0].set_ylabel("Share of Valid Matches (%)", fontsize=11)
+        axes[0].set_ylim(0, 112)
+        axes[0].legend(title="Condition", frameon=True)
+
+        def _regime(out: str) -> str:
+            if out == "COOPERATE / COOPERATE":
+                return "Mutual Cooperation\n(C/C)"
+            if out == "DEFECT / DEFECT":
+                return "Mutual Defection\n(D/D - Nash)"
+            return "Asymmetric Betrayal\n(C/D or D/C)"
+
+        regimes = [
+            "Mutual Cooperation\n(C/C)",
+            "Asymmetric Betrayal\n(C/D or D/C)",
+            "Mutual Defection\n(D/D - Nash)",
+        ]
+        rows_3 = []
+        contingency = []
+        for cond, df in [(self.baseline_label, base_valid), (self.negotiation_label, neg_valid)]:
+            n = len(df)
+            counts = df["joint_outcome"].map(_regime).value_counts()
+            row_counts = []
+            for reg in regimes:
+                c = int(counts.get(reg, 0))
+                row_counts.append(c)
+                rows_3.append({
+                    "Condition": cond,
+                    "Regime": reg,
+                    "Percentage": (c / n * 100) if n > 0 else 0.0,
+                })
+            contingency.append(row_counts)
+        df_3 = pd.DataFrame(rows_3)
+
+        cont_arr = np.array(contingency)
+        active_cols = cont_arr.sum(axis=0) > 0
+        if active_cols.sum() >= 2 and cont_arr.sum() > 0:
+            chi2, p_val, _, _ = stats.chi2_contingency(cont_arr[:, active_cols])
+            stat_note = f"Chi² = {chi2:.2f}, p = {p_val:.4f}"
+        else:
+            stat_note = "Insufficient variance for Chi²"
+
+        ax1 = sns.barplot(
+            data=df_3,
+            x="Regime",
+            y="Percentage",
+            hue="Condition",
+            palette=self.condition_palette,
+            ax=axes[1],
+        )
+        for container in ax1.containers:
+            if isinstance(container, BarContainer):
+                ax1.bar_label(container, fmt="%.1f%%", padding=3, fontsize=9.5)
+        axes[1].set_title(f"Strategic Regimes ({stat_note})", fontsize=12, fontweight="bold")
+        axes[1].set_xlabel("")
+        axes[1].set_ylabel("Share of Valid Matches (%)", fontsize=11)
+        axes[1].set_ylim(0, 112)
+        axes[1].legend(title="Condition", frameon=True)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, "comparison_joint_outcomes.png"), dpi=300)
+        plt.close()
+
+    def _plot_cooperation_and_payoff(self, base_long: pd.DataFrame, neg_long: pd.DataFrame):
+        """
+        Compare individual cooperation rates (95% Wilson CI + Fisher's exact test)
+        and mean individual payoffs (95% CI + Mann-Whitney U test + Nash/Pareto benchmarks).
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.2))
+        conditions = [self.baseline_label, self.negotiation_label]
+        colors = [self.condition_palette[c] for c in conditions]
+
+        coop_rates, yerr_low, yerr_high, counts_info = [], [], [], []
+        k_list, n_list = [], []
+
+        for df in [base_long, neg_long]:
+            n = len(df)
+            k = int((df["action"] == "COOPERATE").sum())
+            rate = (k / n * 100) if n > 0 else 0.0
+            lo, hi = StatsEngine._wilson_ci(k, n)
+            coop_rates.append(rate)
+            yerr_low.append(rate - lo)
+            yerr_high.append(hi - rate)
+            counts_info.append(f"{rate:.1f}%\n({k}/{n})")
+            k_list.append(k)
+            n_list.append(n)
+
+        _, p_coop = stats.fisher_exact([
+            [k_list[0], n_list[0] - k_list[0]],
+            [k_list[1], n_list[1] - k_list[1]],
+        ])
+
+        x_pos = np.arange(len(conditions))
+        bars0 = axes[0].bar(
+            x_pos,
+            coop_rates,
+            yerr=[yerr_low, yerr_high],
+            capsize=6,
+            width=0.48,
+            color=colors,
+            edgecolor="#1f2937",
+            linewidth=0.8,
+            error_kw={"elinewidth": 1.5, "ecolor": "#1f2937"},
+        )
+        for bar, lbl, hi_err in zip(bars0, counts_info, yerr_high):
+            axes[0].text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + hi_err + 2.5,
+                lbl,
+                ha="center",
+                va="bottom",
+                fontsize=10,
+                fontweight="bold",
+            )
+        axes[0].set_xticks(x_pos)
+        axes[0].set_xticklabels([f"{c}\n(n={n} agents)" for c, n in zip(conditions, n_list)], fontsize=10.5)
+        axes[0].set_ylim(0, 118)
+        axes[0].set_ylabel("Cooperation Rate (% ± 95% Wilson CI)", fontsize=11)
+        axes[0].set_title(f"Individual Cooperation Rate (Fisher p = {p_coop:.4f})", fontsize=12, fontweight="bold")
+
+        pay_means, pay_ci = [], []
+        for df in [base_long, neg_long]:
+            vals = df["payoff"].astype(float)
+            m = float(vals.mean())
+            se = float(vals.sem()) if len(vals) > 1 else 0.0
+            pay_means.append(m)
+            pay_ci.append(1.96 * se)
+
+        _, p_pay = stats.mannwhitneyu(base_long["payoff"], neg_long["payoff"], alternative="two-sided")
+
+        bars1 = axes[1].bar(
+            x_pos,
+            pay_means,
+            yerr=pay_ci,
+            capsize=6,
+            width=0.48,
+            color=colors,
+            edgecolor="#1f2937",
+            linewidth=0.8,
+            error_kw={"elinewidth": 1.5, "ecolor": "#1f2937"},
+        )
+        for bar, m, ci in zip(bars1, pay_means, pay_ci):
+            axes[1].text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + ci + 0.12,
+                f"{m:.2f} pts",
+                ha="center",
+                va="bottom",
+                fontsize=10,
+                fontweight="bold",
+            )
+        axes[1].axhline(3.0, color=self.primary_green, linestyle="--", linewidth=1.4, label="Pareto Optimum (CC = 3.0)")
+        axes[1].axhline(1.0, color="#dc2626", linestyle=":", linewidth=1.4, label="Nash Equilibrium (DD = 1.0)")
+        axes[1].set_xticks(x_pos)
+        axes[1].set_xticklabels([f"{c}\n(n={n} agents)" for c, n in zip(conditions, n_list)], fontsize=10.5)
+        axes[1].set_ylim(0, 4.2)
+        axes[1].set_ylabel("Mean Individual Payoff (Points ± 95% CI)", fontsize=11)
+        axes[1].set_title(f"Mean Payoff per Agent (Mann-Whitney p = {p_pay:.4f})", fontsize=12, fontweight="bold")
+        axes[1].legend(loc="upper left", frameon=True, fontsize=9.5)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, "comparison_cooperation_and_payoff.png"), dpi=300)
+        plt.close()
+
+    def _plot_payoff_by_strategy_condition(self, base_long: pd.DataFrame, neg_long: pd.DataFrame):
+        """
+        Compare expected payoff of COOPERATE vs DEFECT across baseline and negotiation
+        to evaluate whether pre-game communication makes cooperation pay off over defection.
+        """
+        df_b = base_long.copy()
+        df_b["Condition"] = self.baseline_label
+        df_n = neg_long.copy()
+        df_n["Condition"] = self.negotiation_label
+        combined = pd.concat([df_b, df_n], ignore_index=True)
+
+        fig, ax = plt.subplots(figsize=(8.4, 5.2))
+        ax = sns.barplot(
+            data=combined,
+            x="action",
+            y="payoff",
+            order=["COOPERATE", "DEFECT"],
+            hue="Condition",
+            palette=self.condition_palette,
+            errorbar=("ci", 95),
+            capsize=0.08,
+            ax=ax,
+        )
+        for container in ax.containers:
+            if isinstance(container, BarContainer):
+                ax.bar_label(container, fmt="%.2f", padding=3, fontsize=9.5)
+
+        ax.axhline(3.0, color=self.primary_green, linestyle="--", linewidth=1.2, alpha=0.8, label="Mutual Coop (3.0)")
+        ax.axhline(1.0, color="#dc2626", linestyle=":", linewidth=1.2, alpha=0.8, label="Mutual Defect (1.0)")
+        ax.set_title("Expected Payoff by Chosen Strategy Across Conditions", fontsize=12.5, fontweight="bold")
+        ax.set_xlabel("Chosen Strategy", fontsize=11)
+        ax.set_ylabel("Mean Payoff (Points ± 95% CI)", fontsize=11)
+        ax.set_ylim(0, 5.4)
+        ax.legend(title="Condition / Reference", frameon=True, fontsize=9)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, "comparison_payoff_by_strategy.png"), dpi=300)
+        plt.close()
+
+    def generate_all_comparison_graphs(self):
+        os.makedirs(self.output_dir, exist_ok=True)
+        if self.baseline_ds.valid_df.empty or self.neg_ds.valid_df.empty:
+            print("Insufficient valid data in baseline or negotiation dataset for comparison graphs.")
+            return
+
+        self._plot_joint_outcomes_comparison(self.baseline_ds.valid_df, self.neg_ds.valid_df)
+        self._plot_cooperation_and_payoff(self.baseline_ds.long_df, self.neg_ds.long_df)
+        self._plot_payoff_by_strategy_condition(self.baseline_ds.long_df, self.neg_ds.long_df)
+        print(f"Comparison graphs saved successfully in '{self.output_dir}/'.")
+
+
 class ChatReport:
     def __init__(self, dataset: DataSet, output_dir: str = "reports", template_path: str | None = None):
         self.dataset = dataset
@@ -1690,9 +1986,10 @@ def summarize_explanations(
 
 
 def generate_all_pipeline(
-        json_path: str = "data/response_history.json",
-        output_dir: str = "reports",
-        model_name: str = "gemma4",
+    json_path: str = "data/response_history.json",
+    output_dir: str = "reports",
+    model_name: str = "gemma4",
+    baseline_path: str | None = None,
 ):
     dataset = DataSet(json_path)
 
@@ -1711,9 +2008,20 @@ def generate_all_pipeline(
         model_name=model_name,
     )
 
+    if baseline_path:
+        baseline_ds = DataSet(baseline_path)
+        comp_graphs = ComparisonGraphs(
+            baseline_dataset=baseline_ds,
+            negotiation_dataset=dataset,
+            output_dir=os.path.join(output_dir, "comparison"),
+        )
+        comp_graphs.generate_all_comparison_graphs()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze simulation history and generate reports/graphs.")
     parser.add_argument("-f", "--file", type=str, default="data/response_history.json", help="Path to the input simulation JSON file.")
+    parser.add_argument("-b", "--baseline", type=str, default=None, help="Optional path to baseline JSON history to generate comparison graphs.")
     parser.add_argument("-o", "--output_dir", type=str, default="reports", help="Directory where reports and graphs will be saved.")
     parser.add_argument("-m", "--model_name", type=str, default="gemma4", help="LLM model name used to summarize explanations.")
     args = parser.parse_args()
@@ -1722,4 +2030,5 @@ if __name__ == "__main__":
         json_path=args.file,
         output_dir=args.output_dir,
         model_name=args.model_name,
+        baseline_path=args.baseline,
     )
