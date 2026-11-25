@@ -1,22 +1,44 @@
 \section{Strategic Setting \& System Architecture}
+
 \subsection{Game-Theoretic Formulation}
-The normal-form game is defined by a tuple \( G = (N, A, u) \), where:
-\begin{itemize}
-    \item \( N \) is the set of players (agents) involved in the game.
-    \item \( A = A_1 \times A_2 \times \ldots \times A_n \) is the set of action profiles, where \( A_i \) is the set of actions available to player \( i \).
-    \item \( u = (u_1, u_2, \ldots, u_n) \) is the vector of utility functions, where \( u_i: A \rightarrow \mathbb{R} \) maps each action profile to a real-valued payoff for player \( i \).
-\end{itemize}
-A Nash equilibrium is a strategy profile \( (a_1^*, a_2^*, \ldots, a_n^*) \) such that no player can unilaterally deviate and improve their payoff, i.e., for all \( i \in N \):
-\[ u_i(a_i^*, a_{-i}^*) \geq u_i(a_i, a_{-i}^*) \quad \forall a_i \in A_i \]
-A strategy profile is Pareto-optimal if there is no other profile that makes at least one player better off without making any other player worse off.
+A game is defined as a \textbf{tuple} \( G = (N, A, u) \), where N is the set of players, A is the set of action profiles, and \( u: A \rightarrow \mathbb{R}^N \) is the utility function mapping action profiles to payoffs for each player.
+
+A \textbf{Nash equilibrium} is a strategy profile \( s^* \in A \) such that no player can unilaterally deviate and improve their payoff, i.e., \( u_i(s^*) \geq u_i(s_i, s_{-i}^*) \) for all \( i \in N \) and \( s_i \in A_i \).
+
+A \textbf{Pareto optimal} outcome is an action profile \( a^* \in A \) such that there is no other action profile \( a' \in A \) where \( u_i(a') \geq u_i(a^*) \) for all \( i \in N \) and \( u_j(a') > u_j(a^*) \) for at least one player \( j \in N \).
+
+In this specific study, we focus on the \textbf{"prisoner's dilemma"} game, which is a classic example of a non-cooperative game. The payoff matrix for the prisoner's dilemma is defined as follows:
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{c|c|c}
+                      & Cooperate (C) & Defect (D) \\
+        \hline
+        Cooperate (C) & (3, 3)        & (0, 5)     \\
+        Defect (D)    & (5, 0)        & (1, 1)     \\
+    \end{tabular}
+    \caption{Payoff matrix for the prisoner's dilemma game.}
+    \label{tab:payoff_matrix}
+\end{table}
+
+The tension is provided by the fact that the Nash equilibrium of the game is \textbf{mutual defection}, which is Pareto suboptimal compared to \textbf{mutual cooperation}.
+This creates a strategic dilemma where players must weigh the benefits of \textbf{cooperation} against the temptation to \textbf{defect}.
+
 \subsection{Three-Phase Interaction Protocol}
-The project is set up as an exploratory analysis, implementing a reproducibility pipeline that allows for systematic experimentation. There are three phases in the program execution:
+The project is set up as an exploratory analysis, implementing a reproducibility pipeline that allows for systematic experimentation.
+
+There are \textit{three} phases in the program execution:
 \begin{enumerate}
     \item \textbf{Rule of Engagement:} Agents are introduced to the rules of the game and the strategic environment in which they will operate. This phase ensures that all agents have a clear understanding of the game structure and their potential payoffs.
     \item \textbf{Communication Phase:} Agents are allowed to communicate using natural language before making their strategic decisions. This phase is designed to observe how communication influences their choices.
     \item \textbf{Choice Phase:} Agents make their strategic decisions based on the information gathered during the communication phase. The outcomes of these decisions are then analyzed to assess the impact of communication on cooperation and defection incentives.
 \end{enumerate}
+
 \subsection{Experimental Setup \& Reproducibility}
-This process are repeated across multiple iterations to gather sufficient data for analysis. Both models are the same and the model that starts the conversation is randomly selected.
-All the supported games are stored in a JSON file, which is read by the program to set up the game environment. The models are loaded from a local LLM backend (e.g., gemma4 via Ollama), and the program includes parsing and fallback safeguards to ensure robustness. The number of simulated matches per game is configurable, and all relevant artifacts, including communication logs and decision outcomes, are logged for reproducibility and further analysis.
-After all matches are completed, the program aggregates the results and generates a comprehensive report that includes statistical analyses, visualizations, and insights into the role of natural-language communication in strategic multi-agent interactions.
+This process are repeated across \textbf{multiple iterations} to gather sufficient data for a solid significance in \textbf{statistical analysis}.
+Both models are the same and the model that starts the conversation is randomly selected.
+This test is repeated with \textbf{0-"small talk" turns} to set a baseline for comparison.
+
+The models are loaded from a local \textbf{LLM backend} (\textit{e.g., gemma4 via Ollama}), and the program includes \textbf{parsing} and fallback \textbf{safeguards} to ensure robustness.
+The number of simulated matches per game is configurable, and all relevant artifacts, including communication logs and decision outcomes, are logged for reproducibility and further analysis.
+
+After all matches are completed, the program aggregates the results and generates a comprehensive report that includes \textbf{statistical analyses}, \textbf{visualizations}, and \textbf{summary} of explanatory patterns observed during the interactions.

@@ -1,0 +1,312 @@
+[
+    {
+        "time": "2026-11-25 13:19:05",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 4747,
+            "answer": "DEFECT",
+            "explanation": "This is a classic one-shot Prisoner's Dilemma. Analyzing the payoff matrix reveals that 'Defect' is the dominant strategy. If the opponent cooperates, defecting yields 5 (vs 3 for cooperation). If the opponent defects, defecting yields 1 (vs 0 for cooperation). Since defection yields a better or equal outcome regardless of the opponent's choice, I must choose DEFECT to maximize my individual payoff.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 8965,
+            "answer": "DEFECT",
+            "explanation": "This is a classic one-shot Prisoner's Dilemma. By analyzing the payoff matrix (3/3, 5/0, 0/5, 1/1), Defecting is the dominant strategy. If the opponent cooperates, defecting yields 5 (better than 3). If the opponent defects, defecting yields 1 (better than 0). Therefore, maximizing individual utility dictates choosing to defect.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 8965,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [4747] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [8965].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [8965]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    },
+    {
+        "time": "2026-11-25 13:19:31",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 2406,
+            "answer": "DEFECT",
+            "explanation": "In a one-shot Prisoner's Dilemma, the goal is to maximize individual payoff. Analyzing the payoffs: If I cooperate, I get 3 if the opponent cooperates, but I get 0 if the opponent defects. If I defect, I get 5 if the opponent cooperates, or 1 if the opponent defects. In all scenarios, defecting yields a better or equal outcome compared to cooperating. Therefore, defection is the strictly dominant strategy, leading to the Nash Equilibrium (Defect, Defect) resulting in 1 point each.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 1084,
+            "answer": "DEFECT",
+            "explanation": "This is a classic one-shot Prisoner's Dilemma. I must analyze the dominant strategy. If the opponent cooperates, I get 5 by defecting (vs. 3 by cooperating). If the opponent defects, I get 1 by defecting (vs. 0 by cooperating). Since defecting yields a better or equal outcome regardless of the opponent's choice, Defect is the dominant strategy to maximize my own payoff.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 1084,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [2406] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [1084].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [1084]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    },
+    {
+        "time": "2026-11-25 13:19:57",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 4771,
+            "answer": "DEFECT",
+            "explanation": "This is a classic Prisoner's Dilemma. Analyzing the payoff matrix reveals that 'Defect' is the dominant strategy. If the opponent cooperates, I gain 5 by defecting (vs. 3 by cooperating). If the opponent defects, I gain 1 by defecting (vs. 0 by cooperating). Since defecting yields a better or equal outcome in all scenarios, I choose to Defect to maximize my expected utility.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 6368,
+            "answer": "DEFECT",
+            "explanation": "In a one-shot Prisoner's Dilemma, the dominant strategy is always to defect. If the opponent cooperates, defecting (5 points) is better than cooperating (3 points). If the opponent defects, defecting (1 point) is better than cooperating (0 points). Defection maximizes my payoff regardless of the opponent's choice.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 6368,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [4771] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [6368].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [6368]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    },
+    {
+        "time": "2026-11-25 13:20:23",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 9771,
+            "answer": "DEFECT",
+            "explanation": "This is a classic one-shot Prisoner's Dilemma. Analyzing the payoffs reveals that 'Defect' is the strictly dominant strategy. If the opponent cooperates, I gain 5 by defecting (vs. 3 by cooperating). If the opponent defects, I gain 1 by defecting (vs. 0 by cooperating). Since defecting yields a better or equal outcome regardless of the opponent's move, the rational choice to maximize individual payoff is to defect.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 7877,
+            "answer": "DEFECT",
+            "explanation": "This is a one-shot Prisoner's Dilemma. Analyzing the payoffs, regardless of whether the opponent (9771) chooses to cooperate (yielding 5 points for Defect vs 3 for Cooperate) or defect (yielding 1 point for Defect vs 0 for Cooperate), the strategy of Defecting always yields a better or equal outcome. Therefore, Defection is the dominant strategy to maximize individual payoff.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 9771,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [9771] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [7877].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [7877]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    },
+    {
+        "time": "2026-11-25 13:20:42",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 4799,
+            "answer": "DEFECT",
+            "explanation": "This is a one-shot Prisoner's Dilemma. Analyzing the payoffs, 'Defect' is the strictly dominant strategy. If the opponent cooperates, I get 5 points by defecting (vs. 3 by cooperating). If the opponent defects, I still get 1 point by defecting (vs. 0 by cooperating). Therefore, to maximize my score, I must defect.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 4425,
+            "answer": "DEFECT",
+            "explanation": "This is a one-shot Prisoner's Dilemma. Analyzing the payoff matrix reveals that 'Defect' is the strictly dominant strategy. If the opponent cooperates, I get 5 points by defecting (vs. 3 by cooperating). If the opponent defects, I get 1 point by defecting (vs. 0 by cooperating). Therefore, to maximize my own payoff, I must defect.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 4799,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [4799] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [4425].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [4425]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    },
+    {
+        "time": "2026-11-25 13:21:01",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 6693,
+            "answer": "DEFECT",
+            "explanation": "In the Prisoner's Dilemma, the payoff structure is (Cooperate, Cooperate) = (3, 3), (Defect, Cooperate) = (5, 0), (Cooperate, Defect) = (0, 5), and (Defect, Defect) = (1, 1). The dominant strategy for maximizing one's own payoff, regardless of the opponent's choice, is to Defect. If the opponent cooperates, defecting (5) is better than cooperating (3). If the opponent defects, defecting (1) is better than cooperating (0). Therefore, 'Defect' is the Nash equilibrium outcome.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 9210,
+            "answer": "DEFECT",
+            "explanation": "This is a classic Prisoner's Dilemma. Analyzing the payoffs, 'Defect' is the strictly dominant strategy. Regardless of whether the opponent cooperates (leading to 5 > 3) or defects (leading to 1 > 0), choosing 'Defect' provides a better or equal payoff for self-maximization. While mutual cooperation (3, 3) is collectively better, the goal is to maximize one's own score, making Defection the rational choice.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 9210,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [6693] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [9210].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [9210]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    },
+    {
+        "time": "2026-11-25 13:21:17",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 1218,
+            "answer": "DEFECT",
+            "explanation": "The payoff matrix is: (C, C) = 3, (D, C) = 5, (C, D) = 0, (D, D) = 1. A rational, self-interested strategy in a one-shot Prisoner's Dilemma is to defect, as it is a dominant strategy. If the opponent cooperates, defecting yields 5 points (better than 3 for cooperating). If the opponent defects, defecting yields 1 point (better than 0 for cooperating). Therefore, defecting maximizes the expected minimum payoff.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 1507,
+            "answer": "DEFECT",
+            "explanation": "This is a one-shot Prisoner's Dilemma. Analyzing the payoffs, defecting is the dominant strategy. If the opponent cooperates, I get 5 points by defecting, which is better than the 3 points gained by cooperating. If the opponent defects, I get 1 point by defecting, which is better than the 0 points gained by cooperating. Since I want to maximize my own score, I must choose DEFECT.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 1507,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [1218] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [1507].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [1507]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    },
+    {
+        "time": "2026-11-25 13:21:36",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 4736,
+            "answer": "DEFECT",
+            "explanation": "In a one-shot Prisoner's Dilemma with the payoff structure (R=3, T=5, S=0, P=1), defection is the dominant strategy. Defecting yields a better outcome regardless of the opponent's choice. If the opponent cooperates, defecting gives 5 (better than 3). If the opponent defects, defecting gives 1 (better than 0). Therefore, I will defect to maximize my expected utility.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 5862,
+            "answer": "DEFECT",
+            "explanation": "This is a one-shot Prisoner's Dilemma. A rational agent must choose the dominant strategy. If I cooperate, I risk getting 0 points if the opponent defects. If I defect, I guarantee at least 1 point (in the D/D scenario) and have a chance to get 5 points (in the D/C scenario). Since Defecting yields a better or equal outcome regardless of the opponent's choice, Defect is the dominant strategy.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 4736,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [4736] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [5862].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [5862]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    },
+    {
+        "time": "2026-11-25 13:22:09",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 1026,
+            "answer": "DEFECT",
+            "explanation": "This is a classic one-shot Prisoner's Dilemma. Analyzing the payoff matrix reveals that 'Defect' is the strictly dominant strategy. If the opponent cooperates, I gain 5 points by defecting (better than 3 for cooperating). If the opponent defects, I gain 1 point by defecting (better than 0 for cooperating). Since Defect yields a better or equal outcome regardless of the opponent's choice, it is the rational choice to maximize individual payoff.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 2088,
+            "answer": "DEFECT",
+            "explanation": "This is a classic one-shot Prisoner's Dilemma. Analyzing the payoffs: If [1026] cooperates, I get 5 points by defecting vs. 3 points by cooperating. If [1026] defects, I get 1 point by defecting vs. 0 points by cooperating. Since defecting yields a strictly better outcome in both scenarios, defecting is the dominant strategy to maximize my own score.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 2088,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [1026] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [2088].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [2088]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    },
+    {
+        "time": "2026-11-25 13:22:31",
+        "game": "Prisoner's Dilemma",
+        "agentA": {
+            "id": 8143,
+            "answer": "DEFECT",
+            "explanation": "The payoff matrix is: (C, C) -> 3, (D, C) -> 5/0, (C, D) -> 0/5, (D, D) -> 1. The dominant strategy in a one-shot Prisoner's Dilemma is to defect, as it guarantees a better or equal outcome regardless of the opponent's choice, and a strictly better outcome if the opponent cooperates. If I assume the opponent cooperates (C), I am better off defecting (5 > 3). If I assume the opponent defects (D), I am better off defecting (1 > 0). Therefore, defecting is the Nash equilibrium and the risk-maximizing choice.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "agentB": {
+            "id": 8589,
+            "answer": "DEFECT",
+            "explanation": "This is a classic one-shot Prisoner's Dilemma. Analyzing the payoff matrix reveals that Defection is the dominant strategy. If the opponent cooperates, I get 5 points by defecting instead of 3 points by cooperating. If the opponent defects, I get 1 point by defecting instead of 0 points by cooperating. Since Defect yields a better or equal outcome regardless of the opponent's choice, I must choose DEFECT to maximize my expected payoff.",
+            "sanity_retries": 0,
+            "hardcoded_fallbacks": 0,
+            "sanity_fail_reasons": {}
+        },
+        "results": {
+            "payoffA": 1,
+            "payoffB": 1
+        },
+        "first_speaker_id": 8143,
+        "full_conversation": [
+            {
+                "role": "system",
+                "content": "[SYSTEM]: You are an autonomous agent called [8143] participating in a behavioral economics experiment, playing a one-shot classic social dilemma (Prisoner's Dilemma). Your opponent is another agent called [8589].\nYour goal is to secure the best possible outcome for yourself by carefully weighing the mathematical risks of the payoff matrix.\n\nDescription of the game:\nYou are participating in a Prisoner's Dilemma. If both cooperate, both get 3 points. If one defects while the other cooperates, the defector gets 5 points and the cooperator gets 0. If both defect, both get 1 point. Your goal is to maximize your own score.\n\nCurrent Phase \u2014 Simultaneous Decision (No Communication):\nThere is NO pre-game chat or communication with [8589]. Both of you must choose your actions simultaneously and independently without exchanging any messages."
+            }
+        ]
+    }
+]
