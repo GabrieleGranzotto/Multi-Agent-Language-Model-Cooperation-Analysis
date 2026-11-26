@@ -1,12 +1,17 @@
 \section{Experimental Results}
 
 \subsection{Joint Action Distributions \& Payoffs}
-In the Figure~\ref{fig:mallm_matrix}, we present the empirical frequencies of joint outcomes (CC, CD, DC, DD) of the "prisoner's dilemma" game.
+In Figure~\ref{fig:mallm_matrix}, we present the \textbf{empirical frequencies} of joint outcomes (CC, CD, DC, DD) of the \textbf{Prisoner's Dilemma
+} game.
 
-Compared to the baseline scenario without communication (Figure~\ref{fig:baseline_comparison}), we observe a significant increase in the frequency of mutual cooperation (CC), when agents are allowed to communicate.
-This suggests that pre-play communication can effectively facilitate coordination and enhance cooperative behavior, even in a setting where the Nash equilibrium favors defection.
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{../..//reports/outcome_matrix_heatmap.png}
+    \caption{Matrix of joint action distributions for the Prisoner's Dilemma game.}
+    \label{fig:mallm_matrix}
+\end{figure}
 
-We can also analyze the average payoffs for each player under different communication conditions:
+We can also analyze the \textbf{average payoffs} for each player under different communication conditions:
 
 \begin{table}[htbp]
     \centering
@@ -16,36 +21,78 @@ We can also analyze the average payoffs for each player under different communic
         Cooperate & $2.56 \pm 1.07$ & $2.53 \pm 1.09$ \\
         Defect    & $2.09 \pm 1.79$ & $2.04 \pm 1.76$ \\
     \end{tabular}
-    \caption{Average payoffs for each player under different communication conditions.}
+    \caption{Average payoffs for different strategies in the Prisoner's Dilemma game with communication. The values are presented as mean $\pm$ standard deviation.}
     \label{tab:average_payoffs}
 \end{table}
 
-To be sure of the correctesness of the generated data
+Theoretically, the decision of an agent to cooperate or defect is not influenced by the first-mover advantage.
+To test this hypothesis we analyzed the \textbf{correlation between the speaking order and the final action} taken by each agent.
+
+We can see in Figure~\ref{fig:correlation_first_turn}, the outcome is that it does not appear statistically significant with respect to the speaking order, the most consistent hypothesis is that the problem is \textbf{symmetric}.
+We can confirm this theory by computing the $\chi^{2} = 0.0648$ and the p-value $= 0.799$.
+We can conclude that the first-mover advantage does not significantly influence the final action taken by each agent.
+
+
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\linewidth]{../..//reports/outcome_matrix_heatmap.png}
-    \caption{Matrix of joint action distributions for the prisoner's dilemma game.}
-    \label{fig:mallm_matrix}
+    \includegraphics[width=\linewidth]{../..//reports/first_mover_impact.png}
+    \caption{Empirical relationship between the speaking order and the final action taken by each agent.}
+    \label{fig:correlation_first_turn}
 \end{figure}
 
+\subsection{Alignment Mechanisms \& Length of Messages}
+
+To avoid potential \textbf{leakage of information} in messages or \textbf{useless verbosity}, we implemented an \textbf{end-of-communication} mechanism that allows agents to send a signal (e.g., \textbf{[DONE]}) to indicate that they have finished their communication and are ready to make their strategic decision.
+We collected and analyzed this data in Figure~\ref{fig:done_outcome}.
+
 \begin{figure}[htbp]
     \centering
-    % TODO: change the path of the image
-    %\includegraphics[width=\linewidth]{../..//reports/baseline/baseline_comparison.png}
-    \caption{Comparison between joint action distributions with and without communication.}
+    \includegraphics[width=\linewidth]{../..//reports/done_proportion_vs_words.png}
+    \caption{Density of [DONE] signals every 100 words sent by the agents.}
+    \label{fig:done_outcome}
+\end{figure}
+
+Another mechanism we implemented is a filter that \textbf{removes corrupted messages} that contain nonsensical or leaking information, such deceptive messages can be used to meta-manipulate the other agent's decision-making process.
+The filter removes that message right after the generation of it and before the next message is generated, and forces the agent to regenerate another message that is more aligned with the game rules and the strategic setting. This \textbf{fallback mechanism} continues for 10 iterations, and if the message is still corrupted, the agent will send a \textbf{default hardcoded message}.
+We try to keep track of these envents in Figure~\ref{fig:sanity}.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\linewidth]{../..//reports/sanity_checks_overview.png}
+    \caption{Overview of sanity checks and fallback mechanisms implemented to ensure message integrity and alignment with game rules.}
+    \label{fig:sanity}
+\end{figure*}
+
+We also analyzed how the \textbf{lenght of the messages sent} changes the final outcome of the game, we can see in Figure~\ref{fig:message_length_outcome} there is a \textbf{weak but significant correlation} between the length of the messages and the final outcome of the game.
+If we compute the point-biserial correlation coefficient we obtain $r = 0.1685$ with the p-value $= 0.0001$ of \textbf{DEFECT} outcome.
+This suggests that \textbf{longer messages} are associated with a \textbf{higher likelihood} of defection, while shorter messages are more likely to be associated with cooperation.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\linewidth]{../..//reports/verbosity_vs_strategy.png}
+    \caption{Relationship between message length and final game outcome.}
+    \label{fig:message_length_outcome}
+\end{figure*}
+
+\subsection{Comparison with Baseline \& Statistical Significance}
+
+The last step of our analysis is to understand if the \textbf{communication has a significant impact} on the final outcome of the game.
+
+In a non-coordination scenario, the \textbf{Nash equilibrium is to defect}, and the expected outcome is that both agents will \textbf{defect (DD)} with a probability of 1.
+So we try to test this hypothesis running a no-comunication test, called \textbf{baseline}.
+
+As we see in Figure~\ref{fig:baseline_comparison}, the communication has a significant impact on the final outcome of the game, with a higher frequency of \textbf{mutual cooperation (CC)} when agents are allowed to communicate.
+The baseline scenario is totally adherent to the \textbf{theoretical expected outcome}, with $100\%$ of the games ending in \textbf{mutual defection (DD)}.
+Obviously, this coordination brings a significant increase in the \textbf{average payoffs} for both players, as shown in Figure~\ref{fig:baseline_comparison}.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\linewidth]{../..//reports/baseline/comparison/comparison_cooperation_and_payoff.png}
+    \caption{Comparison of game outcomes with and without communication.}
     \label{fig:baseline_comparison}
-\end{figure}
+\end{figure*}
 
-\subsection{Alignment, Deception \& Linguistic Patterns}
-% TODO: Analyze consistency between diplomatic promises, private [JUDGE] explanations, and actual chosen actions.
-% TODO: Discuss verbosity effects (message word count vs probability of cooperation/defection) referencing Figure~\ref{fig:mallm_plot}.
+\subsection{Additional Materials}
 
-\begin{figure}[htbp]
-    \centering
-    % TODO: Copy your selected PNG from MALLM intel output into figures/ and uncomment below
-    %\includegraphics[width=\linewidth]{reports/your_mallm_plot.png}
-    \caption{Empirical relationship between communication patterns and strategic outcomes.}
-    \label{fig:mallm_plot}
-\end{figure}
-
+We append additional materials in the \textbf{supplementary materials} section, including a \textbf{detailed log} of all communication exchanges and a \textbf{summary of the explanations} that each agent provided for their decisions divided into macro-explanations.

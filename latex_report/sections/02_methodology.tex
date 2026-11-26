@@ -1,13 +1,13 @@
 \section{Strategic Setting \& System Architecture}
 
 \subsection{Game-Theoretic Formulation}
-A game is defined as a \textbf{tuple} \( G = (N, A, u) \), where N is the set of players, A is the set of action profiles, and \( u: A \rightarrow \mathbb{R}^N \) is the utility function mapping action profiles to payoffs for each player.
+A game is defined as a \textbf{tuple} \( G = (N, A, u) \), where $N$ is the set of players, $A$ is the set of action profiles, and \( u: A \rightarrow \mathbb{R}^N \) is the utility function mapping action profiles to payoffs for each player.
 
-A \textbf{Nash equilibrium} is a strategy profile \( s^* \in A \) such that no player can unilaterally deviate and improve their payoff, i.e., \( u_i(s^*) \geq u_i(s_i, s_{-i}^*) \) for all \( i \in N \) and \( s_i \in A_i \).
+A \textbf{Nash equilibrium} is a strategy profile \( s^* \in A \) such that no player can unilaterally deviate and improve their payoff, i.e., \( u_i(s^*) \geq u_i(s_i, s_{-i}^*) \) for all \( i \in N \) and \( s_i \in A_i \) with \(A = \prod_{i \in N} A_i \).
 
-A \textbf{Pareto optimal} outcome is an action profile \( a^* \in A \) such that there is no other action profile \( a' \in A \) where \( u_i(a') \geq u_i(a^*) \) for all \( i \in N \) and \( u_j(a') > u_j(a^*) \) for at least one player \( j \in N \).
+A \textbf{Pareto optimal} outcome is an action profile \( s^* \in A \) such that there is no other action profile \( s' \in A \) where \( u_i(s') \geq u_i(s^*) \) for all \( i \in N \) and \( u_j(s') > u_j(s^*) \) for at least one player \( j \in N \).
 
-In this specific study, we focus on the \textbf{"prisoner's dilemma"} game, which is a classic example of a non-cooperative game. The payoff matrix for the prisoner's dilemma is defined as follows:
+In this specific study, we focus on the \textbf{"Prisoner's Dilemma"} game, which is a classic example of a non-cooperative game. The payoff matrix for the prisoner's dilemma is defined as follows:
 \begin{table}[htbp]
     \centering
     \begin{tabular}{c|c|c}
@@ -20,7 +20,7 @@ In this specific study, we focus on the \textbf{"prisoner's dilemma"} game, whic
     \label{tab:payoff_matrix}
 \end{table}
 
-The tension is provided by the fact that the Nash equilibrium of the game is \textbf{mutual defection}, which is Pareto suboptimal compared to \textbf{mutual cooperation}.
+The strategic tension arises from the fact that the Nash equilibrium of the game is \textbf{mutual defection}, which is Pareto suboptimal compared to \textbf{mutual cooperation}.
 This creates a strategic dilemma where players must weigh the benefits of \textbf{cooperation} against the temptation to \textbf{defect}.
 
 \subsection{Three-Phase Interaction Protocol}
@@ -28,17 +28,17 @@ The project is set up as an exploratory analysis, implementing a reproducibility
 
 There are \textit{three} phases in the program execution:
 \begin{enumerate}
-    \item \textbf{Rule of Engagement:} Agents are introduced to the rules of the game and the strategic environment in which they will operate. This phase ensures that all agents have a clear understanding of the game structure and their potential payoffs.
+    \item \textbf{Rules of Engagement:} Agents are introduced to the rules of the game and the strategic environment in which they will operate. This phase ensures that all agents have a clear understanding of the game structure and their potential payoffs.
     \item \textbf{Communication Phase:} Agents are allowed to communicate using natural language before making their strategic decisions. This phase is designed to observe how communication influences their choices.
     \item \textbf{Choice Phase:} Agents make their strategic decisions based on the information gathered during the communication phase. The outcomes of these decisions are then analyzed to assess the impact of communication on cooperation and defection incentives.
 \end{enumerate}
 
 \subsection{Experimental Setup \& Reproducibility}
-This process are repeated across \textbf{multiple iterations} to gather sufficient data for a solid significance in \textbf{statistical analysis}.
+This process is repeated across \textbf{multiple iterations} to gather sufficient data to achieve statistical significance in \textbf{statistical analysis}.
 Both models are the same and the model that starts the conversation is randomly selected.
-This test is repeated with \textbf{0-"small talk" turns} to set a baseline for comparison.
+This test is repeated with \textbf{no "cheap talk" turns} to set a baseline for comparison.
 
 The models are loaded from a local \textbf{LLM backend} (\textit{e.g., gemma4 via Ollama}), and the program includes \textbf{parsing} and fallback \textbf{safeguards} to ensure robustness.
 The number of simulated matches per game is configurable, and all relevant artifacts, including communication logs and decision outcomes, are logged for reproducibility and further analysis.
 
-After all matches are completed, the program aggregates the results and generates a comprehensive report that includes \textbf{statistical analyses}, \textbf{visualizations}, and \textbf{summary} of explanatory patterns observed during the interactions.
+After all matches are completed, the program aggregates the results and generates a comprehensive report that includes \textbf{statistical analyses}, \textbf{visualizations}, and a \textbf{summary} of explanatory patterns observed during the interactions.

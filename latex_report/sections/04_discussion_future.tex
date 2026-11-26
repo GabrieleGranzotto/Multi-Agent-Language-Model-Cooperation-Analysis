@@ -1,3 +1,19 @@
 \section{Limitations \& Future Directions}
-% TODO: Critically discuss limitations: sensitivity to prompt framing, local quantized model reasoning bounds, and one-shot dialogue without cross-episode memory.
-% TODO: Propose concrete extensions: multi-agent topologies (N > 2), initial persona/incentive biases, repeated games with reputation tracking, and convention formation.
+
+This study has several \textbf{limitations}:
+\begin{list}{\hspace{0.5cm}\textbullet}{\leftmargin=0.5cm}
+      \item \textbf{First}, the results are sensitive to the framing of the prompts used in the experiments, a possible solution is to use a more diverse set of prompts and analyze how different framings affect the outcomes.
+      \item \textbf{Second}, the dependency on a specific model. This framework can easily accept different models (even a asymmetric scenario), and can test different game scenarios.
+            With more time, we can test different models and analyze how their communication strategies and decision-making processes differ, which could provide insights into the generalizability of our findings.
+      \item \textbf{Third}, the agents have limited memory and reasoning capabilities. In a trust game, it could be more interesting to understand if two agents can build a reputation over time and if other secondary tasks can increase or decrease the level of trust between the agents.
+\end{list}
+
+For the future, we propose several \textbf{extensions to this work}:
+\begin{list}{\hspace{0.5cm}\textbullet}{\leftmargin=0.5cm}
+      \item \textbf{First}, we can explore more complex multi-agent topologies (N > 2) to understand how communication dynamics change in larger groups and how cooperation can emerge in more complex strategic settings.
+      \item \textbf{Second}, we can introduce a wider variety of initial personas and incentive biases to investigate how these factors influence communication strategies and decision-making processes.
+            This could be sociologically interesting to search and find out possible biases in the tested models.
+      \item \textbf{Third}, we can extend the experiments to repeated games with reputation tracking, allowing us to study how agents adapt their strategies over time based on past interactions and the reputations of other agents.
+      \item \textbf{Finally}, we can investigate the formation of conventions and norms in multi-agent interactions,
+            which could provide insights into how communication and strategic behavior evolve in more complex social settings.
+\end{list}

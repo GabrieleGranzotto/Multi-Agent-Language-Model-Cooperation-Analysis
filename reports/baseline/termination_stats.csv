@@ -1,0 +1,2 @@
+termination_type,matches,mean_turns,std_turns,mean_total_words,mean_done_per_100_words,match_share_pct,COOPERATE,DEFECT
+Mutual [DONE],300,2.32,0.47,397.62,0.53,100.0,63.67,36.33

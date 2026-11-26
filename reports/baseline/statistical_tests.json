@@ -1,0 +1,80 @@
+{
+    "meta": {
+        "total_games": 300,
+        "valid_games": 300,
+        "parsing_error_rate_pct": 0.0,
+        "mean_exchange_turns": 2.32,
+        "std_exchange_turns": 0.47,
+        "min_exchange_turns": 2,
+        "max_exchange_turns": 3,
+        "done_termination_rate_pct": 100.0,
+        "mean_done_per_100_words": 0.534,
+        "total_sanity_retries": 62,
+        "mean_sanity_retries_per_match": 0.21,
+        "retry_match_rate_pct": 16.33,
+        "total_hardcoded_fallbacks": 1,
+        "hardcoded_fallback_match_rate_pct": 0.33
+    },
+    "chi_square_tests": {
+        "role_vs_action": {
+            "chi2": 0.0072,
+            "p_value": 0.9324,
+            "dof": 1,
+            "significant_005": false
+        },
+        "first_mover_vs_action": {
+            "chi2": 0.0648,
+            "p_value": 0.799,
+            "dof": 1,
+            "significant_005": false
+        }
+    },
+    "termination_independence_test": {
+        "termination_type_vs_action": {
+            "note": "Insufficient variance for Chi-square test."
+        },
+        "done_role_vs_action": {
+            "note": "Insufficient variance for Chi-square test."
+        },
+        "done_density_mann_whitney": {
+            "compared_actions": "COOPERATE vs DEFECT",
+            "u_statistic": 51621.5,
+            "p_value": 0.0,
+            "significant_005": true
+        }
+    },
+    "symmetry_binomial_test": {
+        "asymmetric_games": 58,
+        "agentA_exploits_count": 30,
+        "agentB_exploits_count": 28,
+        "p_value": 0.8957,
+        "significant_asymmetry_005": false
+    },
+    "payoff_mann_whitney_test": {
+        "compared_actions": "COOPERATE vs DEFECT",
+        "u_statistic": 51840.0,
+        "p_value": 0.0,
+        "significant_005": true
+    },
+    "verbosity_correlation_test": {
+        "metric": "words_per_turn",
+        "target_action": "DEFECT",
+        "point_biserial_r": 0.1685,
+        "p_value": 0.0,
+        "significant_005": true
+    },
+    "sanity_vs_action_test": {
+        "retries_mann_whitney": {
+            "compared_actions": "COOPERATE vs DEFECT",
+            "u_statistic": 38738.5,
+            "p_value": 0.003,
+            "significant_005": true
+        },
+        "sanity_tier_vs_action": {
+            "chi2": 9.9742,
+            "p_value": 0.0068,
+            "dof": 2,
+            "significant_005": true
+        }
+    }
+}

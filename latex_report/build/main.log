@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.3.16)  25 NOV 2026 14:47
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.3.16)  26 NOV 2026 15:28
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -391,32 +391,61 @@ Underfull \vbox (badness 10000) has occurred while \output is active []
 
 
 ]
-<../..//reports/outcome_matrix_heatmap.png, id=65, 491.436pt x 375.804pt>
+<../..//reports/outcome_matrix_heatmap.png, id=73, 491.436pt x 375.804pt>
 File: ../..//reports/outcome_matrix_heatmap.png Graphic file (type png)
 <use ../..//reports/outcome_matrix_heatmap.png>
-Package pdftex.def Info: ../..//reports/outcome_matrix_heatmap.png  used on input line 27.
+Package pdftex.def Info: ../..//reports/outcome_matrix_heatmap.png  used on input line 9.
 (pdftex.def)             Requested size: 251.66472pt x 192.44884pt.
-) (./sections/04_discussion_future.tex) (build/main.bbl) [2 <build/../..//reports/outcome_matrix_heatmap.png>] (build/main.aux)
+<../..//reports/first_mover_impact.png, id=76, 520.344pt x 354.123pt>
+File: ../..//reports/first_mover_impact.png Graphic file (type png)
+<use ../..//reports/first_mover_impact.png>
+Package pdftex.def Info: ../..//reports/first_mover_impact.png  used on input line 39.
+(pdftex.def)             Requested size: 251.66472pt x 171.27393pt.
+<../..//reports/done_proportion_vs_words.png, id=78, 520.344pt x 361.35pt>
+File: ../..//reports/done_proportion_vs_words.png Graphic file (type png)
+<use ../..//reports/done_proportion_vs_words.png>
+Package pdftex.def Info: ../..//reports/done_proportion_vs_words.png  used on input line 51.
+(pdftex.def)             Requested size: 251.66472pt x 174.76933pt.
+<../..//reports/sanity_checks_overview.png, id=80, 953.964pt x 361.35pt>
+File: ../..//reports/sanity_checks_overview.png Graphic file (type png)
+<use ../..//reports/sanity_checks_overview.png>
+Package pdftex.def Info: ../..//reports/sanity_checks_overview.png  used on input line 62.
+(pdftex.def)             Requested size: 520.40126pt x 197.12207pt.
+ [2 <build/../..//reports/outcome_matrix_heatmap.png> <build/../..//reports/first_mover_impact.png> <build/../..//reports/done_proportion_vs_words.png>]
+<../..//reports/verbosity_vs_strategy.png, id=96, 903.375pt x 361.35pt>
+File: ../..//reports/verbosity_vs_strategy.png Graphic file (type png)
+<use ../..//reports/verbosity_vs_strategy.png>
+Package pdftex.def Info: ../..//reports/verbosity_vs_strategy.png  used on input line 73.
+(pdftex.def)             Requested size: 520.40126pt x 208.17163pt.
+<../..//reports/baseline/comparison/comparison_cooperation_and_payoff.png, id=99, 953.964pt x 375.804pt>
+File: ../..//reports/baseline/comparison/comparison_cooperation_and_payoff.png Graphic file (type png)
+<use ../..//reports/baseline/comparison/comparison_cooperation_and_payoff.png>
+Package pdftex.def Info: ../..//reports/baseline/comparison/comparison_cooperation_and_payoff.png  used on input line 91.
+(pdftex.def)             Requested size: 520.40126pt x 205.00696pt.
+) (./sections/04_discussion_future.tex
+Underfull \vbox (badness 10000) has occurred while \output is active []
+
+ [3{/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc} <build/../..//reports/sanity_checks_overview.png>]) (build/main.bbl) [4 <build/../..//reports/verbosity_vs_strategy.png> <build/../..//reports/baseline/comparison/comparison_cooperation_and_payoff.png>] (build/main.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
  ***********
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 9CF2DE4A23ECA75969B6B10A2334F8CF;2020.
+(rerunfilecheck)             Checksum: C71F3DE554659326182A63AE4D507551;2510.
  ) 
 Here is how much of TeX's memory you used:
- 11620 strings out of 467525
- 174967 string characters out of 5418982
- 620367 words of memory out of 5000000
- 40343 multiletter control sequences out of 15000+600000
- 643450 words of font info for 83 fonts, out of 8000000 for 9000
+ 11675 strings out of 467525
+ 177165 string characters out of 5418982
+ 620741 words of memory out of 5000000
+ 40389 multiletter control sequences out of 15000+600000
+ 643785 words of font info for 84 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,11n,79p,422b,517s stack positions out of 10000i,1000n,20000p,200000b,200000s
-</usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1000.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm0900.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti0900.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti1000.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sftt0900.pfb>
-Output written on build/main.pdf (2 pages, 350038 bytes).
+ 75i,11n,79p,518b,519s stack positions out of 10000i,1000n,20000p,200000b,200000s
+</usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1000.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm0900.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti0900.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti1000.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sftt0900.pfb>
+Output written on build/main.pdf (4 pages, 1345266 bytes).
 PDF statistics:
- 147 PDF objects out of 1000 (max. 8388607)
- 111 compressed objects within 2 object streams
- 23 named destinations out of 1000 (max. 500000)
- 78 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 196 PDF objects out of 1000 (max. 8388607)
+ 143 compressed objects within 2 object streams
+ 30 named destinations out of 1000 (max. 500000)
+ 119 words of extra memory for PDF output out of 10000 (max. 10000000)
 
