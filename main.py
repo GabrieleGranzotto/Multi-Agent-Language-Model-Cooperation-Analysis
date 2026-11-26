@@ -12,7 +12,7 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")
     parser.add_argument("-d", "--debug", action="store_true", help="Log sanity-check rejections to console and data/sanity_debug.jsonl.")
     parser.add_argument("-f", "--file", type=str, default="data/response_history.json", help="Path to the JSON file where simulation history is saved.")
-    parser.add_argument("--output_dir", type=str, default="reports", help="Directory where reports, graphs, and summaries are exported.")
+    parser.add_argument("-b", "--output_dir", type=str, default="reports", help="Directory where reports, graphs, and summaries are exported.")
 
     args = parser.parse_args()
     orchestrator = Orchestrator(

@@ -738,7 +738,7 @@ class StatsEngine:
         print("=" * 60 + "\n")
 
     @staticmethod
-    def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    def _wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
         """Compute Wilson score 95% confidence interval for a binomial proportion (in %)."""
         if n == 0:
             return 0.0, 0.0
