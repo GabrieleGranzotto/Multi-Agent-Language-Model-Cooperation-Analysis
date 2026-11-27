@@ -1,18 +1,41 @@
 \begin{thebibliography}{1}
 
-\bibitem{akata2025playing}
+\bibitem{akata2025repeated}
 Elif Akata, Lion Schulz, Julian Coda-Forno, Seong~Joon Oh, Matthias Bethge, and Eric Schulz.
 \newblock Playing repeated games with large language models.
 \newblock {\em Nature Human Behaviour}, 2025.
 
-\bibitem{farrell1996cheap}
+\bibitem{axelrod1984evolution}
+Robert Axelrod.
+\newblock {\em The Evolution of Cooperation}.
+\newblock Basic Books, 1984.
+
+\bibitem{farrell1996cheaptalk}
 Joseph Farrell and Matthew Rabin.
 \newblock Cheap talk.
 \newblock {\em Journal of Economic Perspectives}, 10(3):103--118, 1996.
 
+\bibitem{gemma4_2026}
+{Google DeepMind}.
+\newblock {Gemma 4 Technical Report}.
+\newblock Technical report, {Google}, 2026.
+\newblock Model tag: gemma4.
+
+\bibitem{granzotto2026mallm}
+Gabriele Granzotto.
+\newblock {Multi-Agent Language Model Cooperation Analysis}.
+\newblock \url{https://github.com/GabrieleGranzotto/Multi-Agent-Language-Model-Cooperation-Analysis}, 2026.
+\newblock GitHub repository.
+
+\bibitem{ollama_software}
+{Ollama Team}.
+\newblock {Ollama: Run Large Language Models Locally}.
+\newblock \url{https://ollama.com}, 2026.
+\newblock Software for running LLMs locally.
+
 \bibitem{park2023generative}
-Joon~Sung Park, Joseph~C. O'Brien, Carrie~J. Cai, Meredith~Ringel Morris, Percy Liang, and Michael~S. Bernstein.
+Joon~Sung Park, Joseph~C. O'Brien, Carrie~J. Cai, Meredith Ringel~Morris Morris, Percy Liang, and Michael~S. Bernstein.
 \newblock Generative agents: Interactive simulacra of human behavior.
-\newblock {\em Proceedings of the 36th Annual ACM Symposium on User Interface Software and Technology (UIST)}, pages 1--22, 2023.
+\newblock In {\em Proceedings of the 36th Annual ACM Symposium on User Interface Software and Technology (UIST)}, pages 1--22, 2023.
 
 \end{thebibliography}
