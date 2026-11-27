@@ -1,14 +1,14 @@
 # Fdb version 4
-["bibtex build/main"] 1795779370.57757 "build/main.aux" "build/main.bbl" "build/main" 1795779632.16368 0
+["bibtex build/main"] 0 "build/main.aux" "build/main.bbl" "build/main" 1795782112.91601 -1
   "./references.bib" 1795779405.10357 2112 beaa1fe6105744c40694b5b076ca85a1 ""
   "/usr/local/texlive/2026/texmf-dist/bibtex/bst/base/plain.bst" 1292289607 20613 bd3fbfa9f64872b81ac57a0dd2ed855f ""
-  "build/main.aux" 1795779631.96365 4549 282974f830259a2cbb8bfd0178f48410 "pdflatex"
+  "build/main.aux" 1795782112.70422 4549 282974f830259a2cbb8bfd0178f48410 "pdflatex"
   (generated)
   "build/main.bbl"
   "build/main.blg"
   (rewritten before read)
-["pdflatex"] 1795779630.41809 "/Users/mac_alpaca/Documents/Multi-Agent_Systems/MALLM/latex_report/main.tex" "build/main.pdf" "main" 1795779632.1638 0
-  "/Users/mac_alpaca/Documents/Multi-Agent_Systems/MALLM/latex_report/main.tex" 1795176804.58887 1207 0f2f59431161bd653a815bf54d5726cc ""
+["pdflatex"] 1795782111.20525 "/Users/mac_alpaca/Documents/Multi-Agent_Systems/MALLM/latex_report/main.tex" "build/main.pdf" "main" 1795782112.91614 0
+  "/Users/mac_alpaca/Documents/Multi-Agent_Systems/MALLM/latex_report/main.tex" 1795781983.46193 1229 95e46a935c62cd0ec83448dfe09ba280 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc" 1136849721 2971 def0b6c1f0b107b3b936def894055589 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1136849721 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
@@ -114,6 +114,7 @@
   "/usr/local/texlive/2026/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg" 1279039959 678 4792914a8f45be57bb98413425e4c7af ""
   "/usr/local/texlive/2026/texmf-dist/tex/latex/refcount/refcount.sty" 1576624809 9878 9e94e8fa600d95f9c7731bb21dfb67a4 ""
   "/usr/local/texlive/2026/texmf-dist/tex/latex/rerunfilecheck/rerunfilecheck.sty" 1750533675 9684 a33a14b82ce60d6e77cb9be689d79ee6 ""
+  "/usr/local/texlive/2026/texmf-dist/tex/latex/sttools/flushend.sty" 1750880090 27791 21e1c76de5390dbadaf5a9f712346762 ""
   "/usr/local/texlive/2026/texmf-dist/tex/latex/titlesec/titlesec.sty" 1736023606 48766 87a17a4ef312a39cd43896e34a679a56 ""
   "/usr/local/texlive/2026/texmf-dist/tex/latex/url/url.sty" 1388531844 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "/usr/local/texlive/2026/texmf-dist/tex/latex/xcolor/xcolor.sty" 1727642399 55384 b454dec21c2d9f45ec0b793f0995b992 ""
@@ -127,12 +128,12 @@
   "build/../..//reports/outcome_matrix_heatmap.png" 1795603061.75708 127379 4e83ac2588ed1b811cbe1aed498ea1c6 ""
   "build/../..//reports/sanity_checks_overview.png" 1795603063.31016 187877 692e94a46951d20b4dd3b1b159942fca ""
   "build/../..//reports/verbosity_vs_strategy.png" 1795603062.52227 413436 0a85e62f204a2a253b92b64b1fbcaed0 ""
-  "build/main.aux" 1795779631.96365 4549 282974f830259a2cbb8bfd0178f48410 "pdflatex"
+  "build/main.aux" 1795782112.70422 4549 282974f830259a2cbb8bfd0178f48410 "pdflatex"
   "build/main.bbl" 1795779370.65587 1500 139a538230a3d37e3463169fe79417ef "bibtex build/main"
-  "build/main.out" 1795779631.96424 2510 c71f3de554659326182a63ae4d507551 "pdflatex"
-  "main.tex" 1795176804.58887 1207 0f2f59431161bd653a815bf54d5726cc ""
+  "build/main.out" 1795782112.70481 2510 c71f3de554659326182a63ae4d507551 "pdflatex"
+  "main.tex" 1795781983.46193 1229 95e46a935c62cd0ec83448dfe09ba280 ""
   "sections/01_introduction.tex" 1795610874.45389 495 841fad3acda77e8f47cc9e1453b8636d ""
-  "sections/02_methodology.tex" 1795702754.78232 3770 9b6b2f7468bdf16cb3134d78c444f2c0 ""
+  "sections/02_methodology.tex" 1795782112.33803 3785 7311c452b230992ab5b5d8a270fb3863 ""
   "sections/03_results.tex" 1795779593.53627 6108 4c7cc6d8c615c96dadc67d06ac593a08 ""
   "sections/04_discussion_future.tex" 1795779630.20233 2219 d5df9e58ca2aed27d64ac4364a2098a5 ""
   (generated)
